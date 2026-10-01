@@ -55,21 +55,32 @@ class FaceExpressionAnalyzer:
 
         results = []
         for face in faces:
-            x, y, w, h = face["box"]
+            box = face["box"]
 
-            # Cắt vùng khuôn mặt từ ảnh gốc
-            face_crop = image_bgr[y : y + h, x : x + w]
-
-            # Phân tích cảm xúc trên khuôn mặt đã cắt
-            emotions = self._emotion_analyzer.analyze(face_crop)
+            # Pipeline đầy đủ: padding → face alignment → TTA → ensemble
+            # Truyền landmarks mắt để căn chỉnh khuôn mặt về góc 0°
+            # Truyền các đặc trưng sinh học để phân biệt surprise / angry
+            emotions = self._emotion_analyzer.analyze_aligned(
+                image_bgr,
+                box,
+                left_eye=face.get("left_eye"),
+                right_eye=face.get("right_eye"),
+                eyebrow_lift=face.get("eyebrow_lift", 0.0),
+                mouth_openness=face.get("mouth_openness", 0.0),
+                eye_openness=face.get("eye_openness", 0.0),
+                mouth_width_ratio=face.get("mouth_width_ratio", 0.0),
+                face_vertical_expansion=face.get("face_vertical_expansion", 0.0),
+            )
 
             results.append({
                 "isFace": True,
-                "box": [x, y, w, h],
+                "box": box,
                 "emotions": emotions,
             })
 
         return results
+
+
 
     # ------------------------------------------------------------------
     # Các hàm hỗ trợ giải mã ảnh
