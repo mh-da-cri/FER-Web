@@ -70,12 +70,20 @@ class FaceExpressionAnalyzer:
                 eye_openness=face.get("eye_openness", 0.0),
                 mouth_width_ratio=face.get("mouth_width_ratio", 0.0),
                 face_vertical_expansion=face.get("face_vertical_expansion", 0.0),
+                brow_slope=face.get("brow_slope", 0.0),
+                brow_inner_drop=face.get("brow_inner_drop", 0.0),
+                mouth_corner_angle=face.get("mouth_corner_angle", 0.0),
+                mouth_stretch=face.get("mouth_stretch", 0.0),
+                upper_lip_raise=face.get("upper_lip_raise", 0.0),
+                nose_wrinkle=face.get("nose_wrinkle", 0.0),
             )
 
             results.append({
                 "isFace": True,
                 "box": box,
                 "emotions": emotions,
+                # Các đặc trưng hình học được trả về để debug/calibrate webcam.
+                "features": face.get("features", {}),
             })
 
         return results

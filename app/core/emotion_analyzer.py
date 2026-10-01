@@ -7,8 +7,9 @@ Không phụ thuộc tensorflow hay fer — chỉ dùng OpenCV.
 Cải tiến:
   - Face Alignment: xoay khuôn mặt về góc nghiêng 0° theo trục mắt
   - TTA (Test-Time Augmentation): ensemble inference gốc + flip + slight rotations
-  - CLAHE preprocessing: cân bằng histogram cục bộ
-  - Temperature softmax: phân phối mềm hơn cho các cảm xúc thiểu số
+  - Temperature softmax: phân phối mềm hơn
+  - Hình học Face Mesh: brow / eye / mouth / upper-lip features để tách cảm xúc khó
+  - Heuristic scoring chỉ hiệu chỉnh nhẹ logits của FER+ thay vì ghi đè model
 """
 
 import os
@@ -280,6 +281,12 @@ class EmotionAnalyzer:
         eye_openness: float = 0.0,
         mouth_width_ratio: float = 0.0,
         face_vertical_expansion: float = 0.0,
+        brow_slope: float = 0.0,
+        brow_inner_drop: float = 0.0,
+        mouth_corner_angle: float = 0.0,
+        mouth_stretch: float = 0.0,
+        upper_lip_raise: float = 0.0,
+        nose_wrinkle: float = 0.0,
     ) -> dict[str, float]:
         """
         Pipeline đầy đủ: padding → face alignment → TTA → ensemble → softmax.
@@ -329,6 +336,8 @@ class EmotionAnalyzer:
         return self._logits_to_emotions(
             logits, eyebrow_lift, mouth_openness,
             eye_openness, mouth_width_ratio, face_vertical_expansion,
+            brow_slope, brow_inner_drop, mouth_corner_angle,
+            mouth_stretch, upper_lip_raise, nose_wrinkle,
         )
 
     def _logits_to_emotions(
@@ -339,92 +348,102 @@ class EmotionAnalyzer:
         eye_openness: float = 0.0,
         mouth_width_ratio: float = 0.0,
         face_vertical_expansion: float = 0.0,
+        brow_slope: float = 0.0,
+        brow_inner_drop: float = 0.0,
+        mouth_corner_angle: float = 0.0,
+        mouth_stretch: float = 0.0,
+        upper_lip_raise: float = 0.0,
+        nose_wrinkle: float = 0.0,
     ) -> dict[str, float]:
-        """Chuyển logits thô thành dict cảm xúc với xác suất đã normalize."""
-        
-        # Logit Prior Calibration (LPC)
-        # Bù trừ bias của dataset FER2013/FER+ (quá nhiều neutral và happy)
-        # Giảm logits của majority classes, tăng cho minority classes
-        # Thứ tự: ["neutral", "happy", "surprise", "sad", "angry", "disgust", "fear", "contempt"]
-        prior_biases = np.array([
-            -1.0,  # neutral (giảm mạnh)
-            -0.5,  # happy (giảm vừa)
-             0.3,  # surprise
-             0.5,  # sad
-             0.5,  # angry (tăng base để cạnh tranh tốt hơn)
-             0.5,  # disgust
-             0.5,  # fear
-             0.0   # contempt
-        ])
-        
-        # ================================================================
-        # Hệ thống điểm số đa đặc trưng: Ngạc Nhiên vs Tức Giận
-        # Mỗi đặc trưng đóng góp độc lập -> kết hợp → điều chỉnh logits
-        # ================================================================
-        surprise_idx = _EMOTION_LABELS.index("surprise")
-        angry_idx    = _EMOTION_LABELS.index("angry")
+        """Chuyển logits thành xác suất, kết hợp model với đặc trưng hình học.
 
-        angry_score    = 0.0
+        Các heuristic chỉ là tín hiệu phụ. Model FER+ vẫn là nguồn chính.
+        """
+
+        # Bias nhẹ hơn bản cũ: tránh ép cảm xúc khó thành một nhãn chỉ vì prior.
+        prior_biases = np.array([
+            -0.55, -0.15, 0.10, 0.25, 0.25, 0.25, 0.25, 0.05
+        ], dtype=np.float32)
+        
+        # ---------------------------------------------------------------
+        # Hình học phân biệt cảm xúc
+        #
+        # Ý tưởng:
+        # angry  = inner brow kéo xuống + mắt nheo + môi ép/khóe xuống
+        # sad    = inner brow nâng + khóe miệng xuống + mắt hơi cụp
+        # disgust= môi trên nâng + vùng mũi co + khóe miệng xuống
+        # fear   = mắt mở + miệng kéo ngang + brow nâng vừa
+        # surprise = mắt mở rất rộng + brow nâng rõ + miệng mở theo chiều dọc
+        #
+        # Các hàm ramp chỉ tạo điểm mềm, không dùng ngưỡng nhị phân cứng.
+        # ---------------------------------------------------------------
+        def ramp(v, lo, hi):
+            if hi <= lo:
+                return 0.0
+            return float(np.clip((v - lo) / (hi - lo), 0.0, 1.0))
+
+        def inv_ramp(v, lo, hi):
+            return 1.0 - ramp(v, lo, hi)
+
+        angry_score = 0.0
+        sad_score = 0.0
+        disgust_score = 0.0
+        fear_score = 0.0
         surprise_score = 0.0
 
-        # --- Đặc trưng 1: Lông mày (trọng số: 3.0) ---
-        if eyebrow_lift > 0:
-            if eyebrow_lift < 0.100:
-                angry_score += 3.0       # Nhíu mày = tức giận
-            elif eyebrow_lift > 0.118:
-                surprise_score += 3.0    # Nhướng mày cao = ngạc nhiên
-            elif eyebrow_lift > 0.108:
-                surprise_score += 1.5    # Nhướng nhẹ
-            # 0.100-0.108: mập mờ, không tích điểm
+        # Brow: slope/drop là tín hiệu quan trọng hơn khoảng cách brow-eye tuyệt đối.
+        angry_score += 2.4 * ramp(brow_inner_drop, 0.005, 0.035)
+        angry_score += 1.8 * ramp(brow_slope, 0.005, 0.025)
+        sad_score += 1.6 * inv_ramp(brow_inner_drop, -0.025, 0.0)
+        surprise_score += 2.2 * ramp(eyebrow_lift, 0.105, 0.145)
+        fear_score += 1.1 * ramp(eyebrow_lift, 0.090, 0.125)
 
-        # --- Đặc trưng 2: Mắt - EAR (trọng số: 2.5) ---
-        if eye_openness > 0:
-            if eye_openness > 0.35:
-                surprise_score += 2.5    # Mắt mở thất to
-            elif eye_openness > 0.28:
-                surprise_score += 1.2    # Mắt mở vừa
-            elif eye_openness < 0.24:
-                angry_score += 2.5       # Mắt nheo mạnh
-            elif eye_openness < 0.30:
-                angry_score += 1.5       # Mắt hơi nheo (phổ biến khi tức)
+        # Eyes.
+        surprise_score += 2.4 * ramp(eye_openness, 0.31, 0.39)
+        fear_score += 1.8 * ramp(eye_openness, 0.29, 0.36)
+        angry_score += 1.9 * inv_ramp(eye_openness, 0.235, 0.285)
+        sad_score += 0.7 * inv_ramp(eye_openness, 0.22, 0.27)
 
-        # --- Đặc trưng 3: Hình dạng miệng (trọng số: 2.0) ---
-        # mouth_width_ratio nhỏ = miệng vuông vức la hét (tức giận)
-        # mouth_width_ratio lớn = miệng ô tròn gọn (ngạc nhiên)
-        if mouth_openness > 0.04:
-            if mouth_width_ratio < 1.5:
-                angry_score += 2.0
-            elif mouth_width_ratio < 2.5:
-                angry_score += 0.8
-            elif mouth_width_ratio > 4.0:
-                surprise_score += 2.0
-            elif mouth_width_ratio > 3.0:
-                surprise_score += 1.0
+        # Mouth opening / shape.
+        vertical_open = ramp(mouth_openness, 0.045, 0.12)
+        horizontal_stretch = ramp(mouth_stretch, 0.34, 0.55)
+        wide_ratio = ramp(mouth_width_ratio, 3.0, 5.0)
 
-        # --- Đặc trưng 4: Tổng thể khuôn mặt ---
-        # DISABLED: ngưỡng chưa được calibrate thực tế, gây nhiễu.
-        # face_vertical_expansion bình thường nằm trong zone 0.70-0.75
-        # khiến bất kỳ khuôn mặt nào cũng bị cộng surprise_score mà không có lý do.
-        # pass
+        # Surprise: "O" vertical opening; fear: horizontally stretched opening.
+        surprise_score += 1.7 * vertical_open * wide_ratio
+        fear_score += 2.2 * vertical_open * horizontal_stretch
+        angry_score += 0.9 * ramp(mouth_openness, 0.025, 0.07) * inv_ramp(mouth_width_ratio, 1.4, 2.6)
 
-        # --- Đặc trưng 5: Há miệng (phụ trợ: 1.0) ---
-        if mouth_openness > 0.07 and eyebrow_lift >= 0.108:
-            surprise_score += 1.0
+        # Corners down: sad/disgust; corners compressed/down can also accompany anger.
+        corners_down = ramp(mouth_corner_angle, 0.008, 0.030)
+        sad_score += 2.0 * corners_down
+        disgust_score += 1.2 * corners_down
+        angry_score += 0.8 * corners_down
 
-        # --- Áp dụng vào logits qua score_diff ---
-        score_diff = angry_score - surprise_score
-        if score_diff > 1.0:
-            boost = min(score_diff * 0.6, 4.0)
-            prior_biases[angry_idx]    += boost
-            prior_biases[surprise_idx] -= boost
-        elif score_diff < -1.0:
-            boost = min(-score_diff * 0.6, 4.0)
-            prior_biases[surprise_idx] += boost
-            prior_biases[angry_idx]    -= boost
-        elif score_diff > 0.3:
-            prior_biases[angry_idx]    += 0.5
-        elif score_diff < -0.3:
-            prior_biases[surprise_idx] += 0.5
+        # Disgust signature: upper lip raised / nose-mouth region contracted.
+        disgust_score += 2.8 * ramp(upper_lip_raise, 0.12, 0.45)
+        disgust_score += 1.8 * ramp(nose_wrinkle, 0.08, 0.32)
+
+        # Avoid interpreting every open mouth as fear/surprise.
+        # Fear gets extra weight only when eyes are wide AND mouth is stretched.
+        fear_score += 0.9 * ramp(eye_openness, 0.29, 0.36) * horizontal_stretch
+
+        # Convert scores to bounded logit adjustments. Model remains dominant.
+        heuristic = np.array([
+            0.0,
+            0.0,
+            surprise_score,
+            sad_score,
+            angry_score,
+            disgust_score,
+            fear_score,
+            0.0,
+        ], dtype=np.float32)
+
+        # Center the heuristic scores so no global probability inflation occurs.
+        heuristic -= np.mean(heuristic)
+        heuristic = np.clip(heuristic * 0.75, -2.0, 2.0)
+        prior_biases += heuristic
 
         calibrated_logits = logits + prior_biases
         
