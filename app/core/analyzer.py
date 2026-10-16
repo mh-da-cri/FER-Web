@@ -31,9 +31,13 @@ class FaceExpressionAnalyzer:
     # API Công khai
     # ------------------------------------------------------------------
 
-    def analyze_image(self, image_bgr: np.ndarray) -> list[dict]:
+    def analyze_image(self, image_bgr: np.ndarray, fast_mode: bool = False) -> list[dict]:
         """
         Chạy toàn bộ pipeline phân tích trên ảnh BGR.
+
+        Args:
+            image_bgr: Ảnh đầu vào BGR.
+            fast_mode: Tối ưu tốc độ cho realtime (giảm TTA passes).
 
         Returns:
             Danh sách các dict kết quả, mỗi dict cho một khuôn mặt:
@@ -76,6 +80,7 @@ class FaceExpressionAnalyzer:
                 mouth_stretch=face.get("mouth_stretch", 0.0),
                 upper_lip_raise=face.get("upper_lip_raise", 0.0),
                 nose_wrinkle=face.get("nose_wrinkle", 0.0),
+                fast_mode=fast_mode,
             )
 
             results.append({

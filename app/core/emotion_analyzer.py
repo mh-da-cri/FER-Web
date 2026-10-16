@@ -208,33 +208,38 @@ class EmotionAnalyzer:
             borderMode=cv2.BORDER_REFLECT_101,
         )
 
-    def _ensemble_logits(self, face_bgr: np.ndarray) -> np.ndarray | None:
+    def _ensemble_logits(self, face_bgr: np.ndarray, fast_mode: bool = False) -> np.ndarray | None:
         """
         Test-Time Augmentation: chạy inference trên nhiều augmented version
         của cùng một khuôn mặt rồi ensemble bằng cách cộng logits.
 
-        Augmentations:
-          - Ảnh gốc
-          - Flip ngang (mirror)
-          - Xoay ±5° nhỏ
-
-        Ensemble logits (trước softmax) cho kết quả tốt hơn ensemble probabilities
-        vì tránh bị bão hòa ở đầu ra.
+        Nếu fast_mode=True: chỉ chạy pass ảnh gốc + flip ngang, bỏ qua các góc xoay để tối ưu tốc độ realtime.
         """
         all_logits = []
 
-        # Pass 1: ảnh gốc + slight rotations
-        for angle in _TTA_ANGLES:
-            augmented = self._rotate_image(face_bgr, angle) if angle != 0.0 else face_bgr
-            logits = self._infer(augmented)
-            if logits is not None:
-                all_logits.append(logits)
+        if fast_mode:
+            # Pass 1: ảnh gốc
+            logits_orig = self._infer(face_bgr)
+            if logits_orig is not None:
+                all_logits.append(logits_orig)
+            # Pass 2: flip ngang
+            flipped = cv2.flip(face_bgr, 1)
+            logits_flip = self._infer(flipped)
+            if logits_flip is not None:
+                all_logits.append(logits_flip)
+        else:
+            # Pass 1: ảnh gốc + slight rotations
+            for angle in _TTA_ANGLES:
+                augmented = self._rotate_image(face_bgr, angle) if angle != 0.0 else face_bgr
+                logits = self._infer(augmented)
+                if logits is not None:
+                    all_logits.append(logits)
 
-        # Pass 2: flip ngang
-        flipped = cv2.flip(face_bgr, 1)
-        logits_flip = self._infer(flipped)
-        if logits_flip is not None:
-            all_logits.append(logits_flip)
+            # Pass 2: flip ngang
+            flipped = cv2.flip(face_bgr, 1)
+            logits_flip = self._infer(flipped)
+            if logits_flip is not None:
+                all_logits.append(logits_flip)
 
         if not all_logits:
             return None
@@ -246,12 +251,13 @@ class EmotionAnalyzer:
     # Public API
     # ------------------------------------------------------------------
 
-    def analyze(self, face_image_bgr: np.ndarray) -> dict[str, float]:
+    def analyze(self, face_image_bgr: np.ndarray, fast_mode: bool = False) -> dict[str, float]:
         """
         Phân tích cảm xúc từ ảnh khuôn mặt đã cắt (không có alignment).
 
         Args:
             face_image_bgr: Ảnh khuôn mặt đã cắt định dạng BGR.
+            fast_mode: Giảm số lần TTA để tăng tốc độ cho luồng realtime.
 
         Returns:
             Dictionary ánh xạ tên cảm xúc sang xác suất (0.0 - 1.0).
@@ -264,7 +270,7 @@ class EmotionAnalyzer:
         if h < 20 or w < 20:
             return {}
 
-        logits = self._ensemble_logits(face_image_bgr)
+        logits = self._ensemble_logits(face_image_bgr, fast_mode=fast_mode)
         if logits is None:
             return {}
 
@@ -287,6 +293,7 @@ class EmotionAnalyzer:
         mouth_stretch: float = 0.0,
         upper_lip_raise: float = 0.0,
         nose_wrinkle: float = 0.0,
+        fast_mode: bool = False,
     ) -> dict[str, float]:
         """
         Pipeline đầy đủ: padding → face alignment → TTA → ensemble → softmax.
@@ -298,6 +305,7 @@ class EmotionAnalyzer:
             right_eye      : Tọa độ mắt phải trong ảnh gốc (từ face detector).
             eyebrow_lift   : Tỷ lệ nhướn lông mày để phân biệt ngạc nhiên / tức giận.
             mouth_openness : Tỷ lệ há miệng để củng cố biểu cảm ngạc nhiên.
+            fast_mode      : Bật chế độ nhanh cho realtime (giảm TTA passes).
         """
         if self._model is None:
             return {}
@@ -329,7 +337,7 @@ class EmotionAnalyzer:
         if aligned.shape[0] < 20 or aligned.shape[1] < 20:
             return {}
 
-        logits = self._ensemble_logits(aligned)
+        logits = self._ensemble_logits(aligned, fast_mode=fast_mode)
         if logits is None:
             return {}
 

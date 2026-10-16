@@ -5,7 +5,14 @@ Router API — định nghĩa tất cả endpoint cho phân tích biểu cảm.
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.core.analyzer import FaceExpressionAnalyzer
-from app.schemas import AnalyzeResponse, Base64Request, FaceResult
+from app.schemas import (
+    AnalyzeResponse,
+    Base64Request,
+    ChatAnalyzeRequest,
+    ChatAnalyzeResponse,
+    FaceResult,
+)
+from app.services.chat_service import chat_service
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -27,6 +34,7 @@ _analyzer = FaceExpressionAnalyzer(min_detection_confidence=0.5)
 )
 async def analyze_image_file(
     file: UploadFile = File(..., description="File ảnh cần phân tích"),
+    fast: bool = False,
 ) -> AnalyzeResponse:
     """Phân tích biểu cảm khuôn mặt từ file ảnh tải lên."""
 
@@ -43,7 +51,7 @@ async def analyze_image_file(
             raise HTTPException(status_code=400, detail="File tải lên rỗng.")
 
         image_bgr = _analyzer.decode_upload_bytes(file_bytes)
-        results = _analyzer.analyze_image(image_bgr)
+        results = _analyzer.analyze_image(image_bgr, fast_mode=fast)
 
         return AnalyzeResponse(
             success=True,
@@ -69,7 +77,7 @@ async def analyze_image_file(
         "phân tích cảm xúc theo từng khuôn mặt."
     ),
 )
-async def analyze_image_base64(body: Base64Request) -> AnalyzeResponse:
+async def analyze_image_base64(body: Base64Request, fast: bool = False) -> AnalyzeResponse:
     """Phân tích biểu cảm khuôn mặt từ ảnh mã hóa Base64."""
 
     if not body.image_base64 or not body.image_base64.strip():
@@ -77,7 +85,7 @@ async def analyze_image_base64(body: Base64Request) -> AnalyzeResponse:
 
     try:
         image_bgr = _analyzer.decode_base64(body.image_base64)
-        results = _analyzer.analyze_image(image_bgr)
+        results = _analyzer.analyze_image(image_bgr, fast_mode=fast)
 
         return AnalyzeResponse(
             success=True,
@@ -87,3 +95,37 @@ async def analyze_image_base64(body: Base64Request) -> AnalyzeResponse:
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Phân tích thất bại: {exc}")
+
+
+# ------------------------------------------------------------------
+# POST /api/chat/analyze  —  AI Chatbot phân tích tâm trạng phiên
+# ------------------------------------------------------------------
+@router.post(
+    "/chat/analyze",
+    response_model=ChatAnalyzeResponse,
+    summary="AI Chatbot phân tích cảm xúc và tâm trạng phiên làm việc",
+    description=(
+        "Nhận câu hỏi từ người dùng kèm bản tóm tắt chuỗi thời gian cảm xúc, "
+        "trả lời thông qua Gemini LLM hoặc bộ phân tích thông minh."
+    ),
+)
+async def chat_analyze_session(body: ChatAnalyzeRequest) -> ChatAnalyzeResponse:
+    """Endpoint AI Chatbot phân tích cảm xúc phiên làm việc."""
+    if not body.message or not body.message.strip():
+        raise HTTPException(status_code=400, detail="Nội dung câu hỏi không được rỗng.")
+
+    try:
+        history_list = [{"role": m.role, "content": m.content} for m in body.history]
+        result = chat_service.answer_query(
+            message=body.message,
+            timeline_summary=body.timeline_summary,
+            history=history_list,
+        )
+        return ChatAnalyzeResponse(
+            success=result.get("success", True),
+            reply=result.get("reply", ""),
+            source=result.get("source", "smart_fallback"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi AI Chatbot: {exc}")
+
