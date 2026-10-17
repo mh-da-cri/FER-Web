@@ -6,6 +6,7 @@ Bộ Phân Tích Tổng Hợp — điều phối nhận diện khuôn mặt và 
 
 import base64
 import io
+from collections import deque
 
 import cv2
 import numpy as np
@@ -26,6 +27,82 @@ class FaceExpressionAnalyzer:
             min_detection_confidence=min_detection_confidence
         )
         self._emotion_analyzer = EmotionAnalyzer()
+        self._fatigue_window = deque(maxlen=30)
+
+    @staticmethod
+    def _compute_fatigue_score(
+        eye_openness: float,
+        mouth_openness: float,
+        eye_low_duration: float,
+        micro_sleep: bool,
+        yawning: bool,
+        head_drop: float,
+        eyebrow_lift: float = 0.0,
+        mouth_width_ratio: float = 0.0,
+    ) -> float:
+        """Biểu điểm mệt mỏi từ nhiều chỉ số hình học và xu hướng thời gian."""
+        eye_score = 0.0
+        if eye_openness < 0.18:
+            eye_score += 0.5
+        if eye_low_duration >= 1.2:
+            eye_score += 0.5
+        eye_score = float(np.clip(eye_score, 0.0, 1.0))
+
+        mouth_score = 0.0
+        if mouth_openness > 0.08:
+            mouth_score += 0.45
+        if mouth_width_ratio > 1.1:
+            mouth_score += 0.25
+        if yawning:
+            mouth_score += 0.30
+        mouth_score = float(np.clip(mouth_score, 0.0, 1.0))
+
+        head_score = 0.0
+        if head_drop > 0.08:
+            head_score += 0.55
+        if head_drop > 0.12:
+            head_score += 0.45
+        head_score = float(np.clip(head_score, 0.0, 1.0))
+
+        brow_score = 0.0
+        if eyebrow_lift < 0.06:
+            brow_score += 0.6
+        if yawning:
+            brow_score += 0.4
+        brow_score = float(np.clip(brow_score, 0.0, 1.0))
+
+        fatigue = 0.38 * eye_score + 0.32 * mouth_score + 0.18 * head_score + 0.12 * brow_score
+        if micro_sleep:
+            fatigue = max(fatigue, 0.75)
+        return float(np.clip(fatigue, 0.0, 1.0))
+
+    @staticmethod
+    def _inject_fatigue_label(emotions: dict[str, float], fatigue_score: float) -> dict[str, float]:
+        """Chèn nhãn fatigue vào phân phối cảm xúc và ép đóng vai trò chủ đạo khi tín hiệu mạnh."""
+        if not isinstance(emotions, dict):
+            return {}
+
+        result = dict(emotions)
+        if fatigue_score < 0.45:
+            return result
+
+        fatigue_prob = float(np.clip((fatigue_score - 0.35) / 0.65, 0.0, 0.85))
+        result["fatigue"] = max(result.get("fatigue", 0.0), fatigue_prob)
+
+        if fatigue_score >= 0.75:
+            # Dịch chuyển trọng số ưu tiên sang fatigue thật mạnh, để UI hiển thị rõ
+            # "Mệt mỏi" thay vì bị neutral/normal lấn át.
+            top_weight = float(np.clip(fatigue_score, 0.75, 1.0))
+            for key in list(result):
+                if key != "fatigue":
+                    result[key] = float(result[key]) * (1.0 - top_weight * 0.55)
+            result["fatigue"] = max(result.get("fatigue", 0.0), top_weight * 0.82)
+
+        total = sum(result.values())
+        if total > 0:
+            result = {k: float(v) / total for k, v in result.items()}
+
+        return result
 
     # ------------------------------------------------------------------
     # API Công khai
@@ -60,6 +137,7 @@ class FaceExpressionAnalyzer:
         results = []
         for face in faces:
             box = face["box"]
+            face_features = face.get("features", {})
 
             # Pipeline đầy đủ: padding → face alignment → TTA → ensemble
             # Truyền landmarks mắt để căn chỉnh khuôn mặt về góc 0°
@@ -83,10 +161,50 @@ class FaceExpressionAnalyzer:
                 fast_mode=fast_mode,
             )
 
+            # Multi-signal temporal fatigue: dựa trên cửa sổ 30 frame gần nhất
+            # để phát hiện micro-sleep, ngáp và gục đầu kéo dài theo thời gian.
+            snapshot = {
+                "eye_openness": float(face.get("eye_openness", 0.0)),
+                "mouth_openness": float(face.get("mouth_openness", 0.0)),
+                "head_drop": float(face.get("head_drop", 0.0)),
+                "eyebrow_lift": float(face.get("eyebrow_lift", 0.0)),
+                "mouth_width_ratio": float(face.get("mouth_width_ratio", 0.0)),
+            }
+            self._fatigue_window.append(snapshot)
+
+            recent = list(self._fatigue_window)
+            low_ear_frames = sum(1 for v in recent if v["eye_openness"] < 0.18)
+            eye_low_duration = (low_ear_frames / max(1, len(recent))) * 3.0
+            micro_sleep = low_ear_frames >= 12 and eye_low_duration >= 1.2
+            yawning = (
+                (sum(v["mouth_openness"] for v in recent) / max(1, len(recent))) > 0.08
+                and (sum(v["eyebrow_lift"] for v in recent) / max(1, len(recent))) < 0.06
+                and (sum(v["mouth_width_ratio"] for v in recent) / max(1, len(recent))) > 1.1
+            )
+            head_drop = sum(v["head_drop"] for v in recent) / max(1, len(recent))
+            eyebrow_lift = sum(v["eyebrow_lift"] for v in recent) / max(1, len(recent))
+            mouth_width_ratio = sum(v["mouth_width_ratio"] for v in recent) / max(1, len(recent))
+            mouth_openness = sum(v["mouth_openness"] for v in recent) / max(1, len(recent))
+            eye_openness = sum(v["eye_openness"] for v in recent) / max(1, len(recent))
+
+            fatigue_score = self._compute_fatigue_score(
+                eye_openness=eye_openness,
+                mouth_openness=mouth_openness,
+                eye_low_duration=eye_low_duration,
+                micro_sleep=micro_sleep,
+                yawning=yawning,
+                head_drop=head_drop,
+                eyebrow_lift=eyebrow_lift,
+                mouth_width_ratio=mouth_width_ratio,
+            )
+
+            emotions = self._inject_fatigue_label(emotions, fatigue_score)
+
             results.append({
                 "isFace": True,
                 "box": box,
                 "emotions": emotions,
+                "fatigue_score": round(float(fatigue_score), 4),
                 # Các đặc trưng hình học được trả về để debug/calibrate webcam.
                 "features": face.get("features", {}),
             })

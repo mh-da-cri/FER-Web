@@ -33,7 +33,9 @@ export default function ResultsPanel({ result }) {
   const faces = result?.faces || [];
   const hasFace = faces.some((f) => f.isFace);
   const mainFace = faces.find((f) => f.isFace);
+  const fatigueScore = Number(mainFace?.emotions?.fatigue ?? mainFace?.fatigue_score ?? 0);
   const topEmotion = mainFace ? getTopEmotion(mainFace.emotions) : null;
+  const shouldShowFatigueBadge = (topEmotion?.name === "fatigue") || (fatigueScore >= 0.35);
   const stats = result?.stats || null;
 
   return (
@@ -174,6 +176,7 @@ export default function ResultsPanel({ result }) {
                   </div>
                 );
               })}
+
           </div>
         </div>
       )}

@@ -30,6 +30,10 @@ class FaceResult(BaseModel):
         default_factory=dict,
         description="Tên cảm xúc → điểm tin cậy (0.0–1.0).",
     )
+    fatigue_score: float = Field(
+        default=0.0,
+        description="Chỉ số mệt mỏi 0.0–1.0; luôn được hiển thị ở UI để theo dõi trạng thái mệt mỏi dù cảm xúc chủ đạo không phải fatigue.",
+    )
 
 
 class AnalyzeResponse(BaseModel):

@@ -52,6 +52,7 @@ class FaceDetector:
               upper_lip_raise    : môi trên nâng lên
               nose_wrinkle       : vùng mũi-môi bị co/rút
               eye_openness       : EAR
+              head_drop          : độ gục đầu (chân cằm xuống so với mắt)
               face_vertical_expansion
         """
         h, w, _ = image_bgr.shape
@@ -91,6 +92,7 @@ class FaceDetector:
                 "mouth_stretch": 0.0,
                 "upper_lip_raise": 0.0,
                 "nose_wrinkle": 0.0,
+                "head_drop": 0.0,
                 "face_vertical_expansion": 0.0,
             }
 
@@ -135,6 +137,12 @@ class FaceDetector:
                 upper_lip = lm[13]
                 nose_mouth_dist = self._dist(nose_tip, upper_lip)
                 f["upper_lip_raise"] = float(max(0.0, 0.075 - nose_mouth_dist) / 0.075)
+
+                # Head drop / chin-down proxy: as the head tilts forward, chin moves down
+                # relative to the eye line, which often co-occurs with fatigue.
+                chin = lm[152]
+                eye_center_y = (lm[159].y + lm[386].y) / 2.0
+                f["head_drop"] = float(max(0.0, (chin.y - eye_center_y) / face_h))
 
                 # Nose wrinkle proxy: distance from nostril wings to upper lip.
                 # This is deliberately a weak signal because lighting/skin texture varies.
