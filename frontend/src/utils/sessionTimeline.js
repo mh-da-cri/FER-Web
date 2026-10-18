@@ -85,6 +85,7 @@ class SessionTimelineStore {
       dominantEmotion,
       dominantConfidence,
       triggerReason: metadata.reason || "interval",
+      modelUsed: payload?.model_used || "mobilenetv2",
     };
 
     this.entries.push(entry);

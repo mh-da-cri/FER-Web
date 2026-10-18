@@ -31,26 +31,22 @@ class FaceExpressionAnalyzer:
     # API Công khai
     # ------------------------------------------------------------------
 
-    def analyze_image(self, image_bgr: np.ndarray, fast_mode: bool = False) -> list[dict]:
+    def analyze_image(
+        self,
+        image_bgr: np.ndarray,
+        fast_mode: bool = False,
+        model_name: str | None = None,
+    ) -> list[dict]:
         """
         Chạy toàn bộ pipeline phân tích trên ảnh BGR.
 
         Args:
             image_bgr: Ảnh đầu vào BGR.
             fast_mode: Tối ưu tốc độ cho realtime (giảm TTA passes).
+            model_name: Tùy chọn mô hình ('mobilenetv2' hoặc 'ferplus'). Nếu None, dùng mô hình mặc định hiện tại.
 
         Returns:
-            Danh sách các dict kết quả, mỗi dict cho một khuôn mặt:
-            [
-                {
-                    "isFace": true,
-                    "box": [x, y, w, h],
-                    "emotions": {"happy": 0.85, ...}
-                },
-                ...
-            ]
-            Nếu không tìm thấy khuôn mặt, trả về:
-            [{"isFace": false, "box": [], "emotions": {}}]
+            Danh sách các dict kết quả, mỗi dict cho một khuôn mặt.
         """
         faces = self._face_detector.detect(image_bgr)
 
@@ -62,8 +58,6 @@ class FaceExpressionAnalyzer:
             box = face["box"]
 
             # Pipeline đầy đủ: padding → face alignment → TTA → ensemble
-            # Truyền landmarks mắt để căn chỉnh khuôn mặt về góc 0°
-            # Truyền các đặc trưng sinh học để phân biệt surprise / angry
             emotions = self._emotion_analyzer.analyze_aligned(
                 image_bgr,
                 box,
@@ -81,6 +75,7 @@ class FaceExpressionAnalyzer:
                 upper_lip_raise=face.get("upper_lip_raise", 0.0),
                 nose_wrinkle=face.get("nose_wrinkle", 0.0),
                 fast_mode=fast_mode,
+                model_name=model_name,
             )
 
             results.append({
@@ -92,6 +87,18 @@ class FaceExpressionAnalyzer:
             })
 
         return results
+
+    def get_available_models(self) -> list[dict]:
+        """Danh sách các mô hình khả dụng."""
+        return self._emotion_analyzer.get_available_models()
+
+    def set_model(self, model_name: str) -> bool:
+        """Đổi mô hình hoạt động."""
+        return self._emotion_analyzer.set_active_model(model_name)
+
+    def get_active_model_name(self) -> str:
+        """Lấy tên mô hình hiện tại."""
+        return self._emotion_analyzer.get_active_model()
 
 
 

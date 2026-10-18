@@ -16,7 +16,13 @@ class FaceDetector:
 
     def __init__(self, min_detection_confidence: float = 0.5):
         self._mp_face_detection = mp.solutions.face_detection
+        # model_selection=0: tối ưu cho webcam và cự ly gần (< 2m)
         self._detector = self._mp_face_detection.FaceDetection(
+            model_selection=0,
+            min_detection_confidence=min_detection_confidence,
+        )
+        # model_selection=1: dự phòng cho cự ly xa (< 5m)
+        self._detector_full = self._mp_face_detection.FaceDetection(
             model_selection=1,
             min_detection_confidence=min_detection_confidence,
         )
@@ -57,6 +63,9 @@ class FaceDetector:
         h, w, _ = image_bgr.shape
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
         detection_results = self._detector.process(image_rgb)
+        if not detection_results.detections:
+            detection_results = self._detector_full.process(image_rgb)
+
         mesh_results = self._mesh.process(image_rgb)
 
         faces = []
@@ -162,4 +171,5 @@ class FaceDetector:
     def close(self):
         """Giải phóng tài nguyên MediaPipe."""
         self._detector.close()
+        self._detector_full.close()
         self._mesh.close()

@@ -40,6 +40,43 @@ export default function CameraStream({ onResult, onStatusChange }) {
   const [lastReportReason, setLastReportReason] = useState(null);
   const [currentTrackedEmotion, setCurrentTrackedEmotion] = useState(null);
 
+  // Trạng thái Mô hình AI (MobileNetV2 / FER+)
+  const [selectedModel, setSelectedModel] = useState("mobilenetv2");
+  const selectedModelRef = useRef("mobilenetv2");
+
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+
+  // Nạp mô hình active từ backend khi tải trang
+  useEffect(() => {
+    fetch(`${API_BASE}/api/models`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.active_model) {
+          setSelectedModel(data.active_model);
+          selectedModelRef.current = data.active_model;
+        }
+      })
+      .catch((err) => {
+        console.warn("[CameraStream] Không thể kết nối lấy danh sách mô hình:", err);
+      });
+  }, []);
+
+  const handleSelectModel = useCallback(async (modelId) => {
+    setSelectedModel(modelId);
+    selectedModelRef.current = modelId;
+    try {
+      await fetch(`${API_BASE}/api/models/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelId }),
+      });
+    } catch (err) {
+      console.error("[CameraStream] Lỗi chuyển đổi mô hình:", err);
+    }
+  }, []);
+
   // Refs điều khiển vòng lặp để tránh closure stale state
   const isCameraOnRef = useRef(false);
   const isRealtimeRef = useRef(false);
@@ -212,7 +249,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         const formData = new FormData();
         formData.append("file", blob, "frame.jpg");
 
-        const endpoint = `${API_BASE}/api/analyze${isFast ? "?fast=true" : ""}`;
+        const endpoint = `${API_BASE}/api/analyze?fast=${isFast ? "true" : "false"}&model=${selectedModelRef.current}`;
         const response = await fetch(endpoint, {
           method: "POST",
           body: formData,
@@ -503,8 +540,35 @@ export default function CameraStream({ onResult, onStatusChange }) {
     <div className="glass-card camera-panel">
       {/* ─── Header Camera & Chế độ ─── */}
       <div className="camera-panel__header">
-        <div className="glass-card__title" style={{ margin: 0 }}>
-          Camera Feed
+        <div className="camera-panel__header-left">
+          <div className="glass-card__title" style={{ margin: 0 }}>
+            Camera Feed
+          </div>
+
+          {/* Model Switcher Pill Group */}
+          <div className="model-selector-wrapper">
+            <span className="model-selector-label">Mô hình:</span>
+            <div className="model-pill-group" role="group" aria-label="Chọn mô hình AI">
+              <button
+                type="button"
+                className={`model-pill ${selectedModel === "mobilenetv2" ? "model-pill--active" : ""}`}
+                onClick={() => handleSelectModel("mobilenetv2")}
+                title="MobileNetV2 (Mới): Siêu mượt mà (~10ms), nhận diện ảnh màu RGB 224x224 (7 nhãn)"
+              >
+                <span className="model-pill__icon">⚡</span>
+                <span className="model-pill__name">MobileNetV2</span>
+              </button>
+              <button
+                type="button"
+                className={`model-pill ${selectedModel === "ferplus" ? "model-pill--active" : ""}`}
+                onClick={() => handleSelectModel("ferplus")}
+                title="FER+ (Gốc): Mô hình Microsoft FER+ ONNX 64x64 Grayscale"
+              >
+                <span className="model-pill__icon">🏛️</span>
+                <span className="model-pill__name">FER+</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Toggle Realtime */}
@@ -554,6 +618,12 @@ export default function CameraStream({ onResult, onStatusChange }) {
         {/* HUD Chỉ số Realtime trên video */}
         {isCameraOn && isRealtime && (
           <div className="camera-hud-stats">
+            {/* Model Badge */}
+            <div className="hud-badge hud-badge--model" title={`Mô hình AI: ${selectedModel}`}>
+              <span className="hud-badge__label">AI:</span>
+              <span className="hud-badge__value">{selectedModel === "mobilenetv2" ? "MobileNetV2" : "FER+"}</span>
+            </div>
+
             <div className="hud-badge" title="Thời gian phiên">
               <span className="hud-badge__label">⏱️</span>
               <span className="hud-badge__value">{formatTime(sessionTime)}</span>

@@ -40,7 +40,27 @@ export default function ResultsPanel({ result }) {
     <div className="sidebar">
       {/* ─── 1. Biểu cảm hiện tại ─── */}
       <div className="glass-card">
-        <div className="glass-card__title">Biểu cảm hiện tại</div>
+        <div className="glass-card__header-row">
+          <div className="glass-card__title" style={{ margin: 0 }}>
+            Biểu cảm hiện tại
+          </div>
+          {result?.model_used && (
+            <span
+              className={`model-badge-tag ${
+                result.model_used === "mobilenetv2"
+                  ? "model-badge-tag--mobilenet"
+                  : "model-badge-tag--ferplus"
+              }`}
+              title={
+                result.model_used === "mobilenetv2"
+                  ? "Phân tích bằng MobileNetV2 (RGB 224x224)"
+                  : "Phân tích bằng Microsoft FER+ (64x64 Grayscale)"
+              }
+            >
+              {result.model_used === "mobilenetv2" ? "⚡ MobileNetV2" : "🏛️ FER+"}
+            </span>
+          )}
+        </div>
 
         {topEmotion ? (
           <div className="current-emotion" key={topEmotion.name}>
