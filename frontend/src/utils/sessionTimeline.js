@@ -52,7 +52,7 @@ class SessionTimelineStore {
   /**
    * Thêm một frame phân tích vào dòng thời gian.
    * @param {Object} payload Dữ liệu trả về từ API /api/analyze
-   * @param {Object} metadata Thông tin bổ sung (lý do kích hoạt: 'emotion_changed', '10s_interval', 'manual')
+   * @param {Object} metadata Thông tin bổ sung (lý do kích hoạt: '10s_interval', 'emotion_changed', 'manual', 'initial')
    * @returns {Object} Entry vừa được thêm
    */
   addEntry(payload, metadata = {}) {
@@ -84,8 +84,8 @@ class SessionTimelineStore {
       emotions: { ...emotions },
       dominantEmotion,
       dominantConfidence,
-      triggerReason: metadata.reason || "interval",
-      modelUsed: payload?.model_used || "mobilenetv2",
+      triggerReason: metadata.reason || "10s_interval",
+      modelUsed: "mobilenetv2",
     };
 
     this.entries.push(entry);

@@ -11,6 +11,8 @@ python-multipart==0.0.12
 # --- Computer Vision & AI ---
 opencv-python==4.10.0.84
 mediapipe==0.10.18
+torch>=2.0.0
+torchvision>=0.15.0
 
 # --- Xử lý dữ liệu ---
 numpy==1.26.4

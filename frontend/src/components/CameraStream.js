@@ -8,13 +8,29 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 // Tối ưu hóa kích thước frame gửi lên backend: max width 640px để giảm độ trễ mạng
 const CAPTURE_MAX_WIDTH = 640;
 
-// Chu kỳ cập nhật tối đa nếu cảm xúc không thay đổi (giây)
-const REPORT_INTERVAL_SECONDS = 10;
+// Chu kỳ ghi nhận định kỳ nếu KHÔNG thay đổi cảm xúc: 10 giây
+const HEARTBEAT_INTERVAL_SECONDS = 10;
+
+// Thời gian nhận diện xác nhận nếu CÓ thay đổi cảm xúc: 3 giây
+const EMOTION_CHANGE_CONFIRM_SECONDS = 3;
+
+const EMOTION_META = {
+  happy:    { emoji: "😄", label: "Vui vẻ" },
+  sad:      { emoji: "😢", label: "Buồn" },
+  angry:    { emoji: "😠", label: "Tức giận" },
+  surprise: { emoji: "😲", label: "Ngạc nhiên" },
+  fear:     { emoji: "😨", label: "Sợ hãi" },
+  disgust:  { emoji: "🤢", label: "Ghê tởm" },
+  neutral:  { emoji: "😐", label: "Bình thường" },
+  no_face:  { emoji: "👤", label: "Mất mặt" },
+};
 
 /**
  * Component CameraStream — quản lý luồng webcam, canvas overlay,
  * vòng lặp nhận diện realtime (cách 5 frame capture 1 lần),
- * VÀ cơ chế phát kết quả thông minh: "Cứ 10 giây HOẶC khi phát hiện thay đổi cảm xúc mới đưa kết quả".
+ * VÀ cơ chế phát kết quả:
+ *   - Định kỳ 10 giây nếu KHÔNG thay đổi cảm xúc
+ *   - Thời gian nhận diện 3 giây nếu CÓ thay đổi cảm xúc
  */
 export default function CameraStream({ onResult, onStatusChange }) {
   const videoRef = useRef(null);
@@ -35,47 +51,11 @@ export default function CameraStream({ onResult, onStatusChange }) {
   const [realtimeFps, setRealtimeFps] = useState(0);
   const [sessionTime, setSessionTime] = useState(0);
 
-  // Trạng thái cơ chế đưa kết quả (10s / Đổi cảm xúc)
-  const [secondsUntilNextReport, setSecondsUntilNextReport] = useState(REPORT_INTERVAL_SECONDS);
+  // Trạng thái chu kỳ 10s không đổi & xác nhận đổi cảm xúc 3s
+  const [secondsUntilHeartbeat, setSecondsUntilHeartbeat] = useState(HEARTBEAT_INTERVAL_SECONDS);
+  const [candidateInfo, setCandidateInfo] = useState(null); // { emotion: string, remaining: number }
   const [lastReportReason, setLastReportReason] = useState(null);
   const [currentTrackedEmotion, setCurrentTrackedEmotion] = useState(null);
-
-  // Trạng thái Mô hình AI (MobileNetV2 / FER+)
-  const [selectedModel, setSelectedModel] = useState("mobilenetv2");
-  const selectedModelRef = useRef("mobilenetv2");
-
-  useEffect(() => {
-    selectedModelRef.current = selectedModel;
-  }, [selectedModel]);
-
-  // Nạp mô hình active từ backend khi tải trang
-  useEffect(() => {
-    fetch(`${API_BASE}/api/models`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.active_model) {
-          setSelectedModel(data.active_model);
-          selectedModelRef.current = data.active_model;
-        }
-      })
-      .catch((err) => {
-        console.warn("[CameraStream] Không thể kết nối lấy danh sách mô hình:", err);
-      });
-  }, []);
-
-  const handleSelectModel = useCallback(async (modelId) => {
-    setSelectedModel(modelId);
-    selectedModelRef.current = modelId;
-    try {
-      await fetch(`${API_BASE}/api/models/select`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: modelId }),
-      });
-    } catch (err) {
-      console.error("[CameraStream] Lỗi chuyển đổi mô hình:", err);
-    }
-  }, []);
 
   // Refs điều khiển vòng lặp để tránh closure stale state
   const isCameraOnRef = useRef(false);
@@ -86,10 +66,14 @@ export default function CameraStream({ onResult, onStatusChange }) {
   const lastAnalysisTimeRef = useRef(Date.now());
   const timerIntervalRef = useRef(null);
 
-  // Refs phục vụ cơ chế "Cứ 10s hoặc khi đổi cảm xúc"
+  // Refs phục vụ cơ chế ghi nhận: 10s không đổi / 3s đổi cảm xúc
   const lastReportedEmotionRef = useRef(null);
   const lastReportedTimeRef = useRef(0);
+  const candidateEmotionRef = useRef(null);
+  const candidateStartTimeRef = useRef(0);
   const isFirstReportRef = useRef(true);
+  const windowEmotionsRef = useRef([]);
+  const recentFramesRef = useRef([]);
 
   // Đồng bộ refs với state
   useEffect(() => {
@@ -100,22 +84,43 @@ export default function CameraStream({ onResult, onStatusChange }) {
     isRealtimeRef.current = isRealtime;
   }, [isRealtime]);
 
-  // ─── Khởi tạo / dừng đồng hồ đếm thời gian phiên & đếm ngược 10s ───
+  // ─── Khởi tạo / dừng đồng hồ đếm thời gian phiên & đếm ngược ───
   useEffect(() => {
     if (isRealtime) {
       sessionTimeline.start();
       timerIntervalRef.current = setInterval(() => {
         setSessionTime(sessionTimeline.getElapsedSeconds());
 
-        // Tính số giây còn lại cho đến mốc 10 giây định kỳ
+        const now = Date.now();
+
+        // 1. Đếm ngược chu kỳ 10 giây khi không thay đổi cảm xúc
         if (lastReportedTimeRef.current > 0) {
-          const elapsedSec = (Date.now() - lastReportedTimeRef.current) / 1000;
-          const remaining = Math.max(0, Math.ceil(REPORT_INTERVAL_SECONDS - elapsedSec));
-          setSecondsUntilNextReport(remaining);
+          const elapsedSec = (now - lastReportedTimeRef.current) / 1000;
+          const remaining = Math.max(0, Math.ceil(HEARTBEAT_INTERVAL_SECONDS - elapsedSec));
+          setSecondsUntilHeartbeat(remaining);
         } else {
-          setSecondsUntilNextReport(REPORT_INTERVAL_SECONDS);
+          setSecondsUntilHeartbeat(HEARTBEAT_INTERVAL_SECONDS);
         }
-      }, 500);
+
+        // 2. Đếm ngược 3 giây xác nhận khi phát hiện đổi cảm xúc
+        if (
+          candidateStartTimeRef.current > 0 &&
+          candidateEmotionRef.current &&
+          candidateEmotionRef.current !== "no_face"
+        ) {
+          const candElapsed = (now - candidateStartTimeRef.current) / 1000;
+          const candRemaining = Math.max(
+            0,
+            Math.ceil(EMOTION_CHANGE_CONFIRM_SECONDS - candElapsed)
+          );
+          setCandidateInfo({
+            emotion: candidateEmotionRef.current,
+            remaining: candRemaining,
+          });
+        } else {
+          setCandidateInfo(null);
+        }
+      }, 200);
     } else {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -249,7 +254,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         const formData = new FormData();
         formData.append("file", blob, "frame.jpg");
 
-        const endpoint = `${API_BASE}/api/analyze?fast=${isFast ? "true" : "false"}&model=${selectedModelRef.current}`;
+        const endpoint = `${API_BASE}/api/analyze?fast=${isFast ? "true" : "false"}`;
         const response = await fetch(endpoint, {
           method: "POST",
           body: formData,
@@ -294,66 +299,140 @@ export default function CameraStream({ onResult, onStatusChange }) {
           }
           setAnalyzedCount((prev) => prev + 1);
 
-          // 3. XÁC ĐỊNH CẢM XÚC CỦA FRAME HIỆN TẠI
+          // 3. XÁC ĐỊNH CẢM XÚC CỦA FRAME HIỆN TẠI & TÍCH LŨY BUFFER
           const mainFace = scaledFaces.find((f) => f.isFace);
           let currentDominant = null;
           if (mainFace && mainFace.emotions && Object.keys(mainFace.emotions).length > 0) {
             const sorted = Object.entries(mainFace.emotions).sort((a, b) => b[1] - a[1]);
             currentDominant = sorted[0][0]; // "happy", "sad", "neutral", ...
+            windowEmotionsRef.current.push(mainFace.emotions);
+            if (windowEmotionsRef.current.length > 50) {
+              windowEmotionsRef.current.shift();
+            }
           }
           setCurrentTrackedEmotion(currentDominant);
 
-          // 4. KIỂM TRA ĐIỀU KIỆN ĐƯA RA KẾT QUẢ:
-          //    "Cứ cách 10 giây HOẶC khi phát hiện thay đổi cảm xúc mới đưa kết quả"
+          // Cập nhật recentFramesRef để smooth nhiễu (lưu 4 frame gần nhất)
+          const frameLabel = mainFace ? currentDominant : "no_face";
+          recentFramesRef.current.push(frameLabel);
+          if (recentFramesRef.current.length > 4) {
+            recentFramesRef.current.shift();
+          }
+
+          // Lấy nhãn cảm xúc chiếm đa số trong 4 frame gần nhất để chống nhiễu
+          const counts = {};
+          recentFramesRef.current.forEach((em) => {
+            counts[em] = (counts[em] || 0) + 1;
+          });
+          const activeDominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+
+          // 4. KIỂM TRA ĐIỀU KIỆN GHI NHẬN KẾT QUẢ:
+          //    - Chu kỳ 10 giây nếu KHÔNG thay đổi cảm xúc
+          //    - Thời gian nhận diện 3 giây nếu CÓ thay đổi cảm xúc
           const isManual = !isFast;
-          // Luôn ghi nhận ngay mốc khởi đầu khi phát hiện mặt lần đầu hoặc timeline chưa có dữ liệu
-          const isFirst = (isFirstReportRef.current || sessionTimeline.getTimeline().length === 0) && !!mainFace;
+          const isFirst =
+            (isFirstReportRef.current || sessionTimeline.getTimeline().length === 0) &&
+            !!mainFace;
 
-          // Thay đổi cảm xúc: cảm xúc hiện tại khác với cảm xúc lần report gần nhất
-          const isEmotionChanged =
-            currentDominant !== null &&
-            lastReportedEmotionRef.current !== null &&
-            currentDominant !== lastReportedEmotionRef.current;
+          let shouldReport = false;
+          let reason = "";
 
-          // Thay đổi trạng thái có mặt / mất mặt
-          const isFaceStateChanged =
-            (mainFace && lastReportedEmotionRef.current === "no_face") ||
-            (!mainFace &&
-              lastReportedEmotionRef.current !== null &&
-              lastReportedEmotionRef.current !== "no_face");
+          if (isManual) {
+            shouldReport = true;
+            reason = "manual";
+          } else if (isFirst) {
+            shouldReport = true;
+            reason = "initial";
+          } else {
+            const lastEmotion = lastReportedEmotionRef.current;
 
-          // Định kỳ 10 giây
-          const timeSinceLastReportSec =
-            lastReportedTimeRef.current > 0
-              ? (now - lastReportedTimeRef.current) / 1000
-              : 999;
-          const is10SecondsElapsed = timeSinceLastReportSec >= REPORT_INTERVAL_SECONDS;
+            if (activeDominant === lastEmotion) {
+              // A. CẢM XÚC KHÔNG ĐỔI -> Hủy candidate, kiểm tra chu kỳ 10 giây
+              candidateEmotionRef.current = null;
+              candidateStartTimeRef.current = 0;
 
-          const shouldReport =
-            isManual || isFirst || isEmotionChanged || isFaceStateChanged || is10SecondsElapsed;
+              const timeSinceLastReportSec =
+                lastReportedTimeRef.current > 0
+                  ? (now - lastReportedTimeRef.current) / 1000
+                  : 999;
+
+              if (timeSinceLastReportSec >= HEARTBEAT_INTERVAL_SECONDS) {
+                shouldReport = true;
+                reason = "10s_interval";
+              }
+            } else {
+              // B. CÓ THAY ĐỔI CẢM XÚC -> Cần duy trì nhận diện đủ 3 giây
+              if (candidateEmotionRef.current !== activeDominant) {
+                // Bắt đầu ứng cử viên cảm xúc mới
+                candidateEmotionRef.current = activeDominant;
+                candidateStartTimeRef.current = now;
+              } else {
+                // Cảm xúc mới đang được duy trì
+                const candidateDurationSec = (now - candidateStartTimeRef.current) / 1000;
+                if (candidateDurationSec >= EMOTION_CHANGE_CONFIRM_SECONDS) {
+                  // ĐÃ ĐẠT ĐỦ 3 GIÂY XÁC NHẬN!
+                  shouldReport = true;
+                  reason = "emotion_changed";
+                }
+              }
+            }
+          }
 
           if (shouldReport) {
-            let reason = "10s_interval";
-            if (isManual) reason = "manual";
-            else if (isFirst) reason = "initial";
-            else if (isEmotionChanged) reason = "emotion_changed";
-            else if (isFaceStateChanged) reason = "face_state_changed";
+            // TÍNH TOÁN CẢM XÚC ỔN ĐỊNH TỪ BUFFER CHO MOBILENETV2
+            let finalFaces = scaledFaces;
+            let reportedDominant = activeDominant === "no_face" ? null : activeDominant;
 
-            lastReportedEmotionRef.current = mainFace ? currentDominant : "no_face";
+            if (windowEmotionsRef.current.length > 0 && mainFace) {
+              const buffer = windowEmotionsRef.current;
+              // Nếu là emotion_changed, lấy các frame trong 3 giây vừa xác nhận (~18 frame gần nhất)
+              const sampleFrames = reason === "emotion_changed" ? buffer.slice(-18) : buffer;
+              const avgEmotions = {};
+              const keys = Object.keys(sampleFrames[0]);
+              keys.forEach((k) => {
+                const sum = sampleFrames.reduce((acc, cur) => acc + (cur[k] || 0), 0);
+                avgEmotions[k] = Math.round((sum / sampleFrames.length) * 10000) / 10000;
+              });
+
+              // Chuẩn hóa tổng xác suất = 1.0
+              const totalSum = Object.values(avgEmotions).reduce((a, b) => a + b, 0);
+              if (totalSum > 0) {
+                Object.keys(avgEmotions).forEach((k) => {
+                  avgEmotions[k] = Math.round((avgEmotions[k] / totalSum) * 10000) / 10000;
+                });
+              }
+
+              const sortedAvg = Object.entries(avgEmotions).sort((a, b) => b[1] - a[1]);
+              reportedDominant = sortedAvg[0][0];
+
+              finalFaces = scaledFaces.map((f) =>
+                f.isFace ? { ...f, emotions: avgEmotions } : f
+              );
+            }
+
+            // Dọn sạch buffer & candidate cho chu kỳ tiếp theo
+            windowEmotionsRef.current = [];
+            candidateEmotionRef.current = null;
+            candidateStartTimeRef.current = 0;
+            setCandidateInfo(null);
+
+            lastReportedEmotionRef.current = mainFace ? reportedDominant : "no_face";
             lastReportedTimeRef.current = now;
             isFirstReportRef.current = false;
-            setSecondsUntilNextReport(REPORT_INTERVAL_SECONDS);
+            setSecondsUntilHeartbeat(HEARTBEAT_INTERVAL_SECONDS);
+
+            const finalResult = { ...scaledResult, faces: finalFaces };
 
             // Lưu vào Session Timeline Store
-            const entry = sessionTimeline.addEntry(scaledResult, { reason });
+            const entry = sessionTimeline.addEntry(finalResult, { reason });
 
             // Đưa kết quả ra ngoài component cha (ResultsPanel)
             onResult?.({
-              ...scaledResult,
+              ...finalResult,
               timelineEntry: entry,
               stats: sessionTimeline.getStats(),
               reportReason: reason,
-              reportedEmotion: currentDominant,
+              reportedEmotion: reportedDominant,
             });
 
             setReportedCount((prev) => prev + 1);
@@ -460,6 +539,11 @@ export default function CameraStream({ onResult, onStatusChange }) {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    windowEmotionsRef.current = [];
+    recentFramesRef.current = [];
+    candidateEmotionRef.current = null;
+    candidateStartTimeRef.current = 0;
+    setCandidateInfo(null);
     setIsCameraOn(false);
     onStatusChange?.("off");
 
@@ -505,8 +589,13 @@ export default function CameraStream({ onResult, onStatusChange }) {
     setSnapshot(null);
     setLastReportReason(null);
     setCurrentTrackedEmotion(null);
-    setSecondsUntilNextReport(REPORT_INTERVAL_SECONDS);
+    setCandidateInfo(null);
+    setSecondsUntilHeartbeat(HEARTBEAT_INTERVAL_SECONDS);
 
+    windowEmotionsRef.current = [];
+    recentFramesRef.current = [];
+    candidateEmotionRef.current = null;
+    candidateStartTimeRef.current = 0;
     lastReportedEmotionRef.current = null;
     lastReportedTimeRef.current = 0;
     isFirstReportRef.current = true;
@@ -528,10 +617,9 @@ export default function CameraStream({ onResult, onStatusChange }) {
 
   // Diễn giải lý do đưa kết quả
   const getReasonText = (reason) => {
-    if (reason === "emotion_changed") return "Đổi cảm xúc";
-    if (reason === "10s_interval") return "Định kỳ 10s";
+    if (reason === "10s_interval") return "Định kỳ 10s (không đổi)";
+    if (reason === "emotion_changed") return "Đổi cảm xúc (sau 3s)";
     if (reason === "initial") return "Khởi đầu";
-    if (reason === "face_state_changed") return "Đổi diện mạo";
     if (reason === "manual") return "Thủ công";
     return "";
   };
@@ -545,28 +633,14 @@ export default function CameraStream({ onResult, onStatusChange }) {
             Camera Feed
           </div>
 
-          {/* Model Switcher Pill Group */}
+          {/* Model Badge — chỉ hiển thị tên model */}
           <div className="model-selector-wrapper">
             <span className="model-selector-label">Mô hình:</span>
-            <div className="model-pill-group" role="group" aria-label="Chọn mô hình AI">
-              <button
-                type="button"
-                className={`model-pill ${selectedModel === "mobilenetv2" ? "model-pill--active" : ""}`}
-                onClick={() => handleSelectModel("mobilenetv2")}
-                title="MobileNetV2 (Mới): Siêu mượt mà (~10ms), nhận diện ảnh màu RGB 224x224 (7 nhãn)"
-              >
+            <div className="model-pill-group" role="group" aria-label="Mô hình AI">
+              <div className="model-pill model-pill--active" title="MobileNetV2: Nhận diện ảnh màu RGB 224×224 (7 nhãn cảm xúc)">
                 <span className="model-pill__icon">⚡</span>
                 <span className="model-pill__name">MobileNetV2</span>
-              </button>
-              <button
-                type="button"
-                className={`model-pill ${selectedModel === "ferplus" ? "model-pill--active" : ""}`}
-                onClick={() => handleSelectModel("ferplus")}
-                title="FER+ (Gốc): Mô hình Microsoft FER+ ONNX 64x64 Grayscale"
-              >
-                <span className="model-pill__icon">🏛️</span>
-                <span className="model-pill__name">FER+</span>
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -575,7 +649,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         {isCameraOn && (
           <div className="realtime-toggle-wrapper">
             <label className="switch-label" htmlFor="realtime-toggle">
-              <span className="switch-title">Tự động (Đổi cảm xúc / 10s)</span>
+              <span className="switch-title">Tự động (10s không đổi / 3s đổi)</span>
               <div className="switch-container">
                 <input
                   type="checkbox"
@@ -600,7 +674,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
           isRealtime ? (
             <div className="camera-status camera-status--realtime">
               <span className="camera-status__dot pulse" />
-              TỰ ĐỘNG (5F)
+              TỰ ĐỘNG (10s/3s)
             </div>
           ) : (
             <div className="camera-status camera-status--live">
@@ -619,9 +693,9 @@ export default function CameraStream({ onResult, onStatusChange }) {
         {isCameraOn && isRealtime && (
           <div className="camera-hud-stats">
             {/* Model Badge */}
-            <div className="hud-badge hud-badge--model" title={`Mô hình AI: ${selectedModel}`}>
+            <div className="hud-badge hud-badge--model" title="Mô hình AI: MobileNetV2">
               <span className="hud-badge__label">AI:</span>
-              <span className="hud-badge__value">{selectedModel === "mobilenetv2" ? "MobileNetV2" : "FER+"}</span>
+              <span className="hud-badge__value">MobileNetV2</span>
             </div>
 
             <div className="hud-badge" title="Thời gian phiên">
@@ -629,14 +703,27 @@ export default function CameraStream({ onResult, onStatusChange }) {
               <span className="hud-badge__value">{formatTime(sessionTime)}</span>
             </div>
 
-            {/* Đếm ngược 10 giây */}
-            <div
-              className="hud-badge hud-badge--timer"
-              title="Sẽ đưa kết quả sau số giây này nếu không đổi cảm xúc (hoặc đưa ngay khi đổi cảm xúc)"
-            >
-              <span className="hud-badge__label">Đổi / 10s:</span>
-              <span className="hud-badge__value">{secondsUntilNextReport}s</span>
-            </div>
+            {/* Đếm ngược chu kỳ: 10s không đổi HOẶC 3s đổi cảm xúc */}
+            {candidateInfo && candidateInfo.emotion !== "no_face" ? (
+              <div
+                className="hud-badge hud-badge--candidate pulse"
+                title="Đang xác nhận biểu cảm mới duy trì trong 3 giây để ghi nhận"
+              >
+                <span className="hud-badge__label">Đổi cảm xúc:</span>
+                <span className="hud-badge__value">
+                  {EMOTION_META[candidateInfo.emotion]?.emoji || "⚡"}{" "}
+                  {EMOTION_META[candidateInfo.emotion]?.label || candidateInfo.emotion} ({candidateInfo.remaining}s/3s)
+                </span>
+              </div>
+            ) : (
+              <div
+                className="hud-badge hud-badge--timer"
+                title="Chu kỳ 10 giây nếu giữ nguyên cảm xúc"
+              >
+                <span className="hud-badge__label">Không đổi:</span>
+                <span className="hud-badge__value">{secondsUntilHeartbeat}s/10s</span>
+              </div>
+            )}
 
             <div className="hud-badge" title="Số kết quả đã phát ra / Số frame đã quét">
               <span className="hud-badge__label">Kết quả:</span>
@@ -702,7 +789,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
           ) : (
             <>
               <span className="btn__icon">📸</span>
-              {isRealtime ? "Tự động (10s / Đổi cảm xúc)" : "Chụp & Phân tích"}
+              {isRealtime ? "Tự động (10s/3s)" : "Chụp & Phân tích"}
             </>
           )}
         </button>

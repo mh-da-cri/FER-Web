@@ -739,6 +739,17 @@ body::before {
   color: var(--accent-emerald);
 }
 
+.hud-badge--candidate {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.hud-badge--candidate .hud-badge__value {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
 .hud-badge--reason {
   border-color: rgba(139, 92, 246, 0.4);
 }
@@ -1500,12 +1511,6 @@ body::before {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.35);
   color: #34d399;
-}
-
-.model-badge-tag--ferplus {
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #818cf8;
 }
 
 

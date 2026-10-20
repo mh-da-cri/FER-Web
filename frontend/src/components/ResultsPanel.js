@@ -44,20 +44,12 @@ export default function ResultsPanel({ result }) {
           <div className="glass-card__title" style={{ margin: 0 }}>
             Biểu cảm hiện tại
           </div>
-          {result?.model_used && (
+          {result && (
             <span
-              className={`model-badge-tag ${
-                result.model_used === "mobilenetv2"
-                  ? "model-badge-tag--mobilenet"
-                  : "model-badge-tag--ferplus"
-              }`}
-              title={
-                result.model_used === "mobilenetv2"
-                  ? "Phân tích bằng MobileNetV2 (RGB 224x224)"
-                  : "Phân tích bằng Microsoft FER+ (64x64 Grayscale)"
-              }
+              className="model-badge-tag model-badge-tag--mobilenet"
+              title="Phân tích bằng MobileNetV2 (RGB 224x224)"
             >
-              {result.model_used === "mobilenetv2" ? "⚡ MobileNetV2" : "🏛️ FER+"}
+              ⚡ MobileNetV2
             </span>
           )}
         </div>
@@ -77,8 +69,8 @@ export default function ResultsPanel({ result }) {
             {/* Huy hiệu lý do cập nhật kết quả */}
             {result?.reportReason && (
               <div className="current-emotion__reason-badge">
-                {result.reportReason === "emotion_changed" && "⚡ Đổi cảm xúc"}
-                {result.reportReason === "10s_interval" && "⏱️ Định kỳ 10 giây"}
+                {result.reportReason === "10s_interval" && "⏱️ Định kỳ 10 giây (không đổi)"}
+                {result.reportReason === "emotion_changed" && "⚡ Đổi cảm xúc (xác nhận 3s)"}
                 {result.reportReason === "face_state_changed" && "👤 Đổi diện mạo"}
                 {result.reportReason === "manual" && "📸 Chụp thủ công"}
                 {result.reportReason === "initial" && "🚀 Khởi đầu"}

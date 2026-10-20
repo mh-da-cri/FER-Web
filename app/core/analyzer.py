@@ -2,6 +2,7 @@
 Bộ Phân Tích Tổng Hợp — điều phối nhận diện khuôn mặt và phân tích cảm xúc.
 
 Đây là điểm đầu vào chính cho pipeline Core AI.
+Sử dụng MobileNetV2 (PyTorch) làm mô hình phân tích cảm xúc duy nhất.
 """
 
 import base64
@@ -18,7 +19,7 @@ from app.core.emotion_analyzer import EmotionAnalyzer
 class FaceExpressionAnalyzer:
     """
     Bộ phân tích cấp cao kết hợp nhận diện khuôn mặt MediaPipe
-    với phân tích cảm xúc FER thành một pipeline duy nhất.
+    với phân tích cảm xúc MobileNetV2 thành một pipeline duy nhất.
     """
 
     def __init__(self, min_detection_confidence: float = 0.5):
@@ -35,7 +36,6 @@ class FaceExpressionAnalyzer:
         self,
         image_bgr: np.ndarray,
         fast_mode: bool = False,
-        model_name: str | None = None,
     ) -> list[dict]:
         """
         Chạy toàn bộ pipeline phân tích trên ảnh BGR.
@@ -43,7 +43,6 @@ class FaceExpressionAnalyzer:
         Args:
             image_bgr: Ảnh đầu vào BGR.
             fast_mode: Tối ưu tốc độ cho realtime (giảm TTA passes).
-            model_name: Tùy chọn mô hình ('mobilenetv2' hoặc 'ferplus'). Nếu None, dùng mô hình mặc định hiện tại.
 
         Returns:
             Danh sách các dict kết quả, mỗi dict cho một khuôn mặt.
@@ -57,50 +56,23 @@ class FaceExpressionAnalyzer:
         for face in faces:
             box = face["box"]
 
-            # Pipeline đầy đủ: padding → face alignment → TTA → ensemble
+            # Truyền thêm features hình học từ FaceMesh vào bộ phân tích cảm xúc
             emotions = self._emotion_analyzer.analyze_aligned(
                 image_bgr,
                 box,
                 left_eye=face.get("left_eye"),
                 right_eye=face.get("right_eye"),
-                eyebrow_lift=face.get("eyebrow_lift", 0.0),
-                mouth_openness=face.get("mouth_openness", 0.0),
-                eye_openness=face.get("eye_openness", 0.0),
-                mouth_width_ratio=face.get("mouth_width_ratio", 0.0),
-                face_vertical_expansion=face.get("face_vertical_expansion", 0.0),
-                brow_slope=face.get("brow_slope", 0.0),
-                brow_inner_drop=face.get("brow_inner_drop", 0.0),
-                mouth_corner_angle=face.get("mouth_corner_angle", 0.0),
-                mouth_stretch=face.get("mouth_stretch", 0.0),
-                upper_lip_raise=face.get("upper_lip_raise", 0.0),
-                nose_wrinkle=face.get("nose_wrinkle", 0.0),
                 fast_mode=fast_mode,
-                model_name=model_name,
+                features=face.get("features", {}),
             )
 
             results.append({
                 "isFace": True,
                 "box": box,
                 "emotions": emotions,
-                # Các đặc trưng hình học được trả về để debug/calibrate webcam.
-                "features": face.get("features", {}),
             })
 
         return results
-
-    def get_available_models(self) -> list[dict]:
-        """Danh sách các mô hình khả dụng."""
-        return self._emotion_analyzer.get_available_models()
-
-    def set_model(self, model_name: str) -> bool:
-        """Đổi mô hình hoạt động."""
-        return self._emotion_analyzer.set_active_model(model_name)
-
-    def get_active_model_name(self) -> str:
-        """Lấy tên mô hình hiện tại."""
-        return self._emotion_analyzer.get_active_model()
-
-
 
     # ------------------------------------------------------------------
     # Các hàm hỗ trợ giải mã ảnh

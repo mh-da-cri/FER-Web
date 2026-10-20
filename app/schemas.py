@@ -43,41 +43,10 @@ class AnalyzeResponse(BaseModel):
         default="",
         description="Thông báo trạng thái dễ đọc.",
     )
-    model_used: str = Field(
-        default="mobilenetv2",
-        description="Mô hình AI đã sử dụng để phân tích ('mobilenetv2' hoặc 'ferplus').",
-    )
     faces: list[FaceResult] = Field(
         default_factory=list,
         description="Danh sách kết quả phân tích theo từng khuôn mặt.",
     )
-
-
-# ------------------------------------------------------------------
-# Schemas cho Quản lý & Chuyển đổi Mô hình AI
-# ------------------------------------------------------------------
-class ModelItem(BaseModel):
-    """Thông tin chi tiết của một mô hình AI."""
-
-    id: str = Field(..., description="Mã định danh mô hình ('mobilenetv2' hoặc 'ferplus')")
-    name: str = Field(..., description="Tên hiển thị thân thiện")
-    description: str = Field(..., description="Mô tả tóm tắt tính năng và ưu điểm của mô hình")
-    is_active: bool = Field(default=False, description="Mô hình hiện đang kích hoạt hay không")
-    is_loaded: bool = Field(default=True, description="Mô hình đã được nạp sẵn vào bộ nhớ chưa")
-
-
-class ModelListResponse(BaseModel):
-    """Danh sách các mô hình và mô hình đang kích hoạt."""
-
-    success: bool = Field(default=True, description="Trạng thái request")
-    active_model: str = Field(..., description="ID của mô hình đang hoạt động")
-    models: list[ModelItem] = Field(default_factory=list, description="Danh sách các mô hình khả dụng")
-
-
-class SelectModelRequest(BaseModel):
-    """Yêu cầu chuyển đổi mô hình đang hoạt động."""
-
-    model: str = Field(..., description="ID mô hình muốn chuyển sang ('mobilenetv2' hoặc 'ferplus')")
 
 
 # ------------------------------------------------------------------

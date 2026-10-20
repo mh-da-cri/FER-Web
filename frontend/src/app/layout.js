@@ -3,7 +3,7 @@ import "./globals.css";
 export const metadata = {
   title: "AI Camera — Phân Tích Biểu Cảm Khuôn Mặt",
   description:
-    "Ứng dụng AI Camera phân tích biểu cảm khuôn mặt theo thời gian thực sử dụng MediaPipe và mô hình FER.",
+    "Ứng dụng AI Camera phân tích biểu cảm khuôn mặt theo thời gian thực sử dụng MediaPipe và mô hình MobileNetV2 (PyTorch).",
 };
 
 export default function RootLayout({ children }) {

@@ -104,10 +104,14 @@ export default function HomePage() {
                 <div className="review-info-item">
                   <span className="review-info-label">Lý do ghi nhận</span>
                   <span className="review-info-val">
-                    {selectedEntry.triggerReason === "emotion_changed"
-                      ? "⚡ Đổi cảm xúc"
-                      : selectedEntry.triggerReason === "10s_interval"
-                      ? "⏱️ Định kỳ 10s"
+                    {selectedEntry.triggerReason === "10s_interval"
+                      ? "⏱️ Định kỳ 10s (không đổi)"
+                      : selectedEntry.triggerReason === "emotion_changed"
+                      ? "⚡ Đổi cảm xúc (xác nhận 3s)"
+                      : selectedEntry.triggerReason === "face_state_changed"
+                      ? "👤 Đổi diện mạo"
+                      : selectedEntry.triggerReason === "initial"
+                      ? "🚀 Khởi đầu"
                       : "📸 Thủ công"}
                   </span>
                 </div>

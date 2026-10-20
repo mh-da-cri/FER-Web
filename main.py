@@ -14,7 +14,7 @@ app = FastAPI(
     title="AI Camera — Expression Analysis API",
     description=(
         "Backend API sử dụng **MediaPipe** để nhận diện khuôn mặt và "
-        "**FER** để nhận dạng biểu cảm khuôn mặt. Tải lên ảnh "
+        "**MobileNetV2 (PyTorch)** để nhận dạng biểu cảm khuôn mặt. Tải lên ảnh "
         "hoặc gửi chuỗi Base64 để nhận phân tích cảm xúc theo từng khuôn mặt."
     ),
     version="1.0.0",
