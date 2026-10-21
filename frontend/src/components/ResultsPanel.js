@@ -13,7 +13,6 @@ const EMOTION_CONFIG = {
   fear:     { emoji: "😨", label: "Sợ hãi", color: "#8b5cf6" },
   disgust:  { emoji: "🤢", label: "Ghê tởm", color: "#84cc16" },
   neutral:  { emoji: "😐", label: "Bình thường", color: "#06b6d4" },
-  fatigue:  { emoji: "😴", label: "Mệt mỏi", color: "#ec4899" },
 };
 
 function getTopEmotion(emotions) {
@@ -33,9 +32,8 @@ export default function ResultsPanel({ result }) {
   const faces = result?.faces || [];
   const hasFace = faces.some((f) => f.isFace);
   const mainFace = faces.find((f) => f.isFace);
-  const fatigueScore = Number(mainFace?.emotions?.fatigue ?? mainFace?.fatigue_score ?? 0);
+  const fatigueScore = Number(mainFace?.fatigue_score ?? 0);
   const topEmotion = mainFace ? getTopEmotion(mainFace.emotions) : null;
-  const shouldShowFatigueBadge = (topEmotion?.name === "fatigue") || (fatigueScore >= 0.35);
   const stats = result?.stats || null;
 
   return (
@@ -73,6 +71,23 @@ export default function ResultsPanel({ result }) {
             <div>Chưa có dữ liệu phân tích</div>
           </div>
         )}
+      </div>
+
+      <div className="glass-card">
+        <div className="glass-card__title">Trạng thái</div>
+        <div className="emotion-bar__header">
+          <span className="emotion-bar__name">Mệt mỏi</span>
+          <span className="emotion-bar__value">{(fatigueScore * 100).toFixed(1)}%</span>
+        </div>
+        <div className="emotion-bar__track" role="meter" aria-label="Mức độ mệt mỏi" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fatigueScore * 100)}>
+          <div
+            className="emotion-bar__fill"
+            style={{
+              width: `${Math.max(fatigueScore * 100, 0)}%`,
+              backgroundColor: "#ec4899",
+            }}
+          />
+        </div>
       </div>
 
       {/* ─── 2. Thống kê phiên làm việc (Session Analytics) ─── */}
@@ -147,6 +162,7 @@ export default function ResultsPanel({ result }) {
 
           <div className="emotion-bars">
             {Object.entries(mainFace.emotions)
+              .filter(([emotion, value]) => value > 0.01 || emotion === "fatigue")
               .sort((a, b) => b[1] - a[1])
               .map(([emotion, value]) => {
                 const config = EMOTION_CONFIG[emotion] || {

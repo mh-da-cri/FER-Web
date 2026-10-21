@@ -321,6 +321,12 @@ export default function CameraStream({ onResult, onStatusChange }) {
 
             setReportedCount((prev) => prev + 1);
             setLastReportReason(reason);
+          } else {
+            onResult?.({
+              ...scaledResult,
+              stats: sessionTimeline.getStats(),
+              reportReason: null,
+            });
           }
         }
       } catch (err) {

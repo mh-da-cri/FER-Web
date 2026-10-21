@@ -15,6 +15,7 @@ class FaceDetector:
     """Phát hiện khuôn mặt và trích xuất đặc trưng cơ mặt bằng MediaPipe Face Mesh."""
 
     def __init__(self, min_detection_confidence: float = 0.5):
+        self._noise_state = {}
         self._mp_face_detection = mp.solutions.face_detection
         self._detector = self._mp_face_detection.FaceDetection(
             model_selection=1,
@@ -37,6 +38,27 @@ class FaceDetector:
     @staticmethod
     def _clamp01(x):
         return float(max(0.0, min(1.0, x)))
+
+    @staticmethod
+    def _smooth_noisy_signal(current: float, previous: float | None, tolerance: float, alpha: float) -> float:
+        """Làm mượt tín hiệu nhiễu bằng cách trung bình hóa khi thay đổi quá nhỏ."""
+        if previous is None:
+            return float(current)
+        delta = abs(float(current) - float(previous))
+        if delta <= tolerance:
+            return float(previous) * (1.0 - alpha) + float(current) * alpha
+        return float(current)
+
+    @staticmethod
+    def _filter_head_drop(current: float, previous: float | None) -> float:
+        """Smooth head-pitch proxy without deleting small but sustained movements."""
+        smoothed = FaceDetector._smooth_noisy_signal(
+            current,
+            previous,
+            tolerance=0.015,
+            alpha=0.6,
+        )
+        return FaceDetector._clamp01(smoothed)
 
     def detect(self, image_bgr: np.ndarray) -> list[dict]:
         """
@@ -81,6 +103,11 @@ class FaceDetector:
                 right_eye = (int(kps[0].x * w), int(kps[0].y * h))
                 left_eye = (int(kps[1].x * w), int(kps[1].y * h))
 
+            state = self._noise_state.setdefault(
+                i,
+                {"eye_prev": None, "head_prev": None},
+            )
+
             f = {
                 "eyebrow_lift": 0.0,
                 "brow_slope": 0.0,
@@ -105,7 +132,13 @@ class FaceDetector:
                 # Eyes: vertical opening / horizontal width.
                 left_ear = self._dist(lm[159], lm[145]) / (self._dist(lm[33], lm[133]) + 1e-6)
                 right_ear = self._dist(lm[386], lm[374]) / (self._dist(lm[362], lm[263]) + 1e-6)
-                f["eye_openness"] = float((left_ear + right_ear) / 2.0)
+                eye_raw = float((left_ear + right_ear) / 2.0)
+                eye_prev = state.get("eye_prev")
+                eye_smoothed = self._smooth_noisy_signal(eye_raw, eye_prev, tolerance=0.06, alpha=0.55)
+                if eye_prev is not None and eye_raw < 0.28 and abs(eye_raw - eye_prev) < 0.10:
+                    eye_smoothed = min(eye_smoothed, eye_raw)
+                f["eye_openness"] = float(self._clamp01(eye_smoothed))
+                state["eye_prev"] = f["eye_openness"]
 
                 mouth_h = self._dist(lm[13], lm[14])
                 mouth_w = self._dist(lm[61], lm[291])
@@ -142,7 +175,10 @@ class FaceDetector:
                 # relative to the eye line, which often co-occurs with fatigue.
                 chin = lm[152]
                 eye_center_y = (lm[159].y + lm[386].y) / 2.0
-                f["head_drop"] = float(max(0.0, (chin.y - eye_center_y) / face_h))
+                head_raw = float(max(0.0, (chin.y - eye_center_y) / face_h))
+
+                f["head_drop"] = self._filter_head_drop(head_raw, state["head_prev"])
+                state["head_prev"] = f["head_drop"]
 
                 # Nose wrinkle proxy: distance from nostril wings to upper lip.
                 # This is deliberately a weak signal because lighting/skin texture varies.

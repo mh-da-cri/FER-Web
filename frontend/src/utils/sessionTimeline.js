@@ -82,7 +82,7 @@ class SessionTimelineStore {
       faceCount: faces.filter((f) => f.isFace).length,
       box: mainFace?.box || [],
       emotions: { ...emotions },
-      fatigueScore: mainFace?.emotions?.fatigue ?? mainFace?.fatigue_score ?? 0,
+      fatigueScore: mainFace?.fatigue_score ?? 0,
       dominantEmotion,
       dominantConfidence,
       triggerReason: metadata.reason || "interval",
@@ -136,9 +136,9 @@ class SessionTimelineStore {
           : 0;
     }
 
-    const fatigueFrames = this.entries.filter((e) => e.hasFace && e.emotions && typeof e.emotions.fatigue === "number");
+    const fatigueFrames = this.entries.filter((e) => e.hasFace && Number.isFinite(e.fatigueScore));
     const fatiguePercentage = fatigueFrames.length > 0
-      ? (fatigueFrames.reduce((sum, e) => sum + (e.emotions.fatigue || 0), 0) / fatigueFrames.length) * 100
+      ? (fatigueFrames.reduce((sum, e) => sum + e.fatigueScore, 0) / fatigueFrames.length) * 100
       : 0;
 
     let dominantOverall = null;
