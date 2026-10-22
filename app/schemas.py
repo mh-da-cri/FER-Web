@@ -30,6 +30,10 @@ class FaceResult(BaseModel):
         default_factory=dict,
         description="Tên cảm xúc → điểm tin cậy (0.0–1.0).",
     )
+    fatigue_score: float = Field(
+        default=0.0,
+        description="Chỉ số mệt mỏi 0.0–1.0; luôn được hiển thị ở UI để theo dõi trạng thái mệt mỏi dù cảm xúc chủ đạo không phải fatigue.",
+    )
 
 
 class AnalyzeResponse(BaseModel):
@@ -46,4 +50,39 @@ class AnalyzeResponse(BaseModel):
     faces: list[FaceResult] = Field(
         default_factory=list,
         description="Danh sách kết quả phân tích theo từng khuôn mặt.",
+    )
+
+
+# ------------------------------------------------------------------
+# Schemas cho AI Chatbot Phân Tích Cảm Xúc
+# ------------------------------------------------------------------
+class ChatMessage(BaseModel):
+    """Tin nhắn trong đoạn hội thoại chat."""
+
+    role: str = Field(default="user", description="'user' hoặc 'model'/'assistant'")
+    content: str = Field(..., description="Nội dung tin nhắn")
+
+
+class ChatAnalyzeRequest(BaseModel):
+    """Yêu cầu phân tích tâm trạng phiên từ client."""
+
+    message: str = Field(..., description="Câu hỏi hoặc yêu cầu từ người dùng")
+    timeline_summary: dict | None = Field(
+        default=None,
+        description="Bản tóm tắt dữ liệu phiên làm việc từ SessionTimeline",
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Lịch sử các tin nhắn trò chuyện trước đó",
+    )
+
+
+class ChatAnalyzeResponse(BaseModel):
+    """Phản hồi phân tích từ AI Chatbot."""
+
+    success: bool = Field(..., description="Trạng thái xử lý")
+    reply: str = Field(..., description="Câu trả lời từ AI")
+    source: str = Field(
+        default="gemini",
+        description="Nguồn phản hồi: 'gemini' hoặc 'smart_fallback'",
     )
