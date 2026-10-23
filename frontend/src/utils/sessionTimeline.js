@@ -7,7 +7,8 @@
 class SessionTimelineStore {
   constructor() {
     this.entries = [];
-    this.startTime = null;
+    this.elapsedBeforePause = 0;
+    this.activeSince = null;
     this.subscribers = new Set();
     this.sessionActive = false;
   }
@@ -16,10 +17,10 @@ class SessionTimelineStore {
    * Bắt đầu một phiên ghi nhận mới hoặc tiếp tục phiên hiện tại.
    */
   start() {
-    if (!this.startTime) {
-      this.startTime = Date.now();
+    if (!this.sessionActive) {
+      this.activeSince = Date.now();
+      this.sessionActive = true;
     }
-    this.sessionActive = true;
     this.notify();
   }
 
@@ -27,6 +28,10 @@ class SessionTimelineStore {
    * Tạm dừng ghi nhận.
    */
   pause() {
+    if (this.sessionActive && this.activeSince !== null) {
+      this.elapsedBeforePause += Date.now() - this.activeSince;
+      this.activeSince = null;
+    }
     this.sessionActive = false;
     this.notify();
   }
@@ -36,7 +41,8 @@ class SessionTimelineStore {
    */
   reset() {
     this.entries = [];
-    this.startTime = Date.now();
+    this.elapsedBeforePause = 0;
+    this.activeSince = this.sessionActive ? Date.now() : null;
     this.notify();
   }
 
@@ -45,8 +51,10 @@ class SessionTimelineStore {
    * @returns {number} Số giây (làm tròn 1 chữ số thập phân)
    */
   getElapsedSeconds() {
-    if (!this.startTime) return 0;
-    return Math.round(((Date.now() - this.startTime) / 1000) * 10) / 10;
+    const activeDuration =
+      this.elapsedBeforePause +
+      (this.activeSince === null ? 0 : Date.now() - this.activeSince);
+    return Math.round((activeDuration / 1000) * 10) / 10;
   }
 
   /**
@@ -56,9 +64,7 @@ class SessionTimelineStore {
    * @returns {Object} Entry vừa được thêm
    */
   addEntry(payload, metadata = {}) {
-    if (!this.startTime) {
-      this.startTime = Date.now();
-    }
+    if (!this.sessionActive) return null;
 
     const elapsed = this.getElapsedSeconds();
     const faces = payload?.faces || [];
@@ -235,3 +241,9 @@ class SessionTimelineStore {
 
 // Singleton instance dùng chung cho toàn bộ ứng dụng
 export const sessionTimeline = new SessionTimelineStore();
+
+export function formatSessionDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)} phút ${seconds % 60} giây`;
+}

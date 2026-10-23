@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import { sessionTimeline } from "@/utils/sessionTimeline";
+import { formatSessionDuration, sessionTimeline } from "@/utils/sessionTimeline";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -46,8 +46,9 @@ export default function CameraStream({ onResult, onStatusChange }) {
   const isProcessingRef = useRef(false);
   const videoFrameCounterRef = useRef(0);
   const frameCallbackIdRef = useRef(null);
-  const lastAnalysisTimeRef = useRef(Date.now());
+  const lastAnalysisTimeRef = useRef(0);
   const timerIntervalRef = useRef(null);
+  const scheduleNextFrameRef = useRef(null);
 
   // Refs phục vụ cơ chế "Cứ 10s hoặc khi đổi cảm xúc"
   const lastReportedEmotionRef = useRef(null);
@@ -80,6 +81,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         }
       }, 500);
     } else {
+      sessionTimeline.pause();
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
@@ -362,7 +364,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         }
       }
 
-      scheduleNextFrame();
+      scheduleNextFrameRef.current?.();
     };
 
     if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
@@ -371,6 +373,10 @@ export default function CameraStream({ onResult, onStatusChange }) {
       frameCallbackIdRef.current = requestAnimationFrame(onFrame);
     }
   }, [processFrame]);
+
+  useEffect(() => {
+    scheduleNextFrameRef.current = scheduleNextFrame;
+  }, [scheduleNextFrame]);
 
   // Bắt đầu hoặc dừng vòng lặp Realtime khi toggle thay đổi
   useEffect(() => {
@@ -488,11 +494,9 @@ export default function CameraStream({ onResult, onStatusChange }) {
     onResult?.(null);
   }, [onResult]);
 
-  // Định dạng thời gian hiển thị (00:00)
+  // Định dạng thời lượng phiên realtime.
   const formatTime = (totalSeconds) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = Math.floor(totalSeconds % 60);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    return formatSessionDuration(totalSeconds);
   };
 
   // Diễn giải lý do đưa kết quả
