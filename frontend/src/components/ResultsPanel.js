@@ -1,5 +1,7 @@
 "use client";
 
+import { formatSessionDuration } from "@/utils/sessionTimeline";
+
 /**
  * Component ResultsPanel — hiển thị kết quả phân tích biểu cảm của frame hiện tại
  * và tổng hợp thống kê toàn bộ phiên làm việc (Session Analytics).
@@ -22,10 +24,7 @@ function getTopEmotion(emotions) {
 }
 
 function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return "00:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  return formatSessionDuration(seconds);
 }
 
 export default function ResultsPanel({ result }) {
