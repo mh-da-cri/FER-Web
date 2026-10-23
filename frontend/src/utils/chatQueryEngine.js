@@ -602,7 +602,7 @@ export class EmotionChatEngine {
           (stats.emotionPercentages.angry || 0) +
           (stats.emotionPercentages.fear || 0) +
           (stats.emotionPercentages.disgust || 0)) *
-          10
+        10
       ) / 10;
 
       let energyStatus = "";
@@ -743,10 +743,10 @@ export class EmotionChatEngine {
       const faceEntries = timeline.filter((e) => e.hasFace && e.dominantConfidence);
       const avgConf = faceEntries.length > 0
         ? Math.round(
-            (faceEntries.reduce((sum, e) => sum + e.dominantConfidence, 0) /
-              faceEntries.length) *
-              100
-          )
+          (faceEntries.reduce((sum, e) => sum + e.dominantConfidence, 0) /
+            faceEntries.length) *
+          100
+        )
         : 0;
 
       return {

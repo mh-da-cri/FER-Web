@@ -517,23 +517,6 @@ export default function CameraStream({ onResult, onStatusChange }) {
           Camera Feed
         </div>
 
-        {/* Toggle Realtime */}
-        {isCameraOn && (
-          <div className="realtime-toggle-wrapper">
-            <label className="switch-label" htmlFor="realtime-toggle">
-              <span className="switch-title">Tự động (Đổi cảm xúc / 10s)</span>
-              <div className="switch-container">
-                <input
-                  type="checkbox"
-                  id="realtime-toggle"
-                  checked={isRealtime}
-                  onChange={(e) => setIsRealtime(e.target.checked)}
-                />
-                <span className="switch-slider"></span>
-              </div>
-            </label>
-          </div>
-        )}
       </div>
 
       {/* ─── Video + Canvas Overlay ─── */}
@@ -565,7 +548,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
         {isCameraOn && isRealtime && (
           <div className="camera-hud-stats">
             <div className="hud-badge" title="Thời gian phiên">
-              <span className="hud-badge__label">⏱️</span>
+              <span className="hud-badge__label">Thời gian:</span>
               <span className="hud-badge__value">{formatTime(sessionTime)}</span>
             </div>
 
@@ -587,7 +570,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
 
             {lastReportReason && (
               <div className="hud-badge hud-badge--reason" title="Lý do đưa kết quả gần nhất">
-                <span className="hud-badge__label">⚡</span>
+                <span className="hud-badge__label">Cập nhật:</span>
                 <span className="hud-badge__value">{getReasonText(lastReportReason)}</span>
               </div>
             )}
@@ -604,7 +587,6 @@ export default function CameraStream({ onResult, onStatusChange }) {
         {/* Placeholder khi camera tắt */}
         {!isCameraOn && (
           <div className="camera-placeholder">
-            <div className="camera-placeholder__icon">📷</div>
             <div className="camera-placeholder__text">
               Nhấn &quot;Bật Camera&quot; để bắt đầu nhận diện
             </div>
@@ -616,15 +598,24 @@ export default function CameraStream({ onResult, onStatusChange }) {
       <div className="controls-bar">
         {!isCameraOn ? (
           <button className="btn btn--primary" onClick={startCamera} id="btn-start-camera">
-            <span className="btn__icon">📹</span>
             Bật Camera
           </button>
         ) : (
           <button className="btn btn--danger" onClick={stopCamera} id="btn-stop-camera">
-            <span className="btn__icon">⏹</span>
             Tắt Camera
           </button>
         )}
+
+        <button
+          className={`btn btn--realtime${isRealtime ? " btn--realtime-active" : ""}`}
+          onClick={() => setIsRealtime((enabled) => !enabled)}
+          disabled={!isCameraOn}
+          id="btn-realtime"
+          aria-pressed={isRealtime}
+          title={!isCameraOn ? "Bật camera để sử dụng Real-time" : "Tự động cập nhật khi đổi cảm xúc hoặc sau mỗi 10 giây"}
+        >
+          Real-time
+        </button>
 
         {/* Nút Chụp ảnh thủ công */}
         <button
@@ -640,10 +631,7 @@ export default function CameraStream({ onResult, onStatusChange }) {
               Đang phân tích...
             </span>
           ) : (
-            <>
-              <span className="btn__icon">📸</span>
-              {isRealtime ? "Tự động (10s / Đổi cảm xúc)" : "Chụp & Phân tích"}
-            </>
+            "Chụp & Phân tích"
           )}
         </button>
 
@@ -655,7 +643,6 @@ export default function CameraStream({ onResult, onStatusChange }) {
             id="btn-reset-session"
             title="Xóa dữ liệu phiên để bắt đầu phiên mới"
           >
-            <span className="btn__icon">🔄</span>
             Reset Phiên
           </button>
         )}

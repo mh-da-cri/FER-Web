@@ -7,16 +7,23 @@ import { EmotionChatEngine } from "@/utils/chatQueryEngine";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 const QUICK_PROMPTS = [
-  "📊 Tóm tắt phiên làm việc",
-  "😴 Tôi có dấu hiệu mệt mỏi không?",
-  "🎯 Tôi có tập trung không?",
-  "🌟 Cảm xúc nào xuất hiện nhiều nhất?",
-  "🕒 Khi nào tôi vui vẻ?",
-  "😄 Vui vẻ chiếm bao nhiêu frame?",
-  "⏱️ Giây thứ 10 cảm xúc gì?",
-  "⚖️ So sánh vui vẻ và mệt mỏi",
-  "💡 Lời khuyên cải thiện tâm trạng",
+  "Tóm tắt phiên làm việc",
+  "Tôi có dấu hiệu mệt mỏi không?",
+  "Tôi có tập trung không?",
+  "Cảm xúc nào xuất hiện nhiều nhất?",
+  "Khi nào tôi vui vẻ?",
+  "Vui vẻ chiếm bao nhiêu frame?",
+  "Giây thứ 10 cảm xúc gì?",
+  "So sánh vui vẻ và mệt mỏi",
+  "Lời khuyên cải thiện tâm trạng",
 ];
+
+const EMOJI_PATTERN =
+  /[\p{Extended_Pictographic}\uFE0F\u200D\u20E3\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}]/gu;
+
+function stripEmojis(text) {
+  return text.replace(EMOJI_PATTERN, "").replace(/[ \t]{2,}/g, " ");
+}
 
 function generateMsgId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -28,12 +35,12 @@ export default function ChatPanel({ onJumpToTime }) {
       id: "welcome",
       role: "assistant",
       content:
-        "👋 Xin chào! Tôi là **AI Trợ Lý Phân Tích Cảm Xúc**.\n\n" +
+        "Xin chào! Tôi là **AI Trợ Lý Phân Tích Cảm Xúc**.\n\n" +
         "Tôi có thể tự động trả lời tức thì mọi câu hỏi về:\n" +
-        "• ⏱️ **Mốc thời gian**: *'ở giây thứ 10 cảm xúc gì?'*, *'khi nào tôi vui?'*\n" +
-        "• 📊 **Thống kê & so sánh**: *'cảm xúc nào nhiều nhất?'*, *'so sánh vui và mệt mỏi'*\n" +
-        "• 😴 **Tình trạng sức khỏe**: *'tôi có mệt mỏi không?'*, *'tôi có tập trung không?'*\n" +
-        "• 🧠 **Phân tích mở & tâm lý chuyên sâu**: Tự động chuyển tiếp đến **Google Gemini AI** khi gặp câu hỏi ngoài quy tắc.\n\n" +
+        "• **Mốc thời gian**: *'ở giây thứ 10 cảm xúc gì?'*, *'khi nào tôi vui?'*\n" +
+        "• **Thống kê & so sánh**: *'cảm xúc nào nhiều nhất?'*, *'so sánh vui và mệt mỏi'*\n" +
+        "• **Tình trạng sức khỏe**: *'tôi có mệt mỏi không?'*, *'tôi có tập trung không?'*\n" +
+        "• **Phân tích mở & tâm lý chuyên sâu**: Tự động chuyển tiếp đến **Google Gemini AI** khi gặp câu hỏi ngoài quy tắc.\n\n" +
         "Bạn có thể chọn các gợi ý bên dưới hoặc tự nhập bất kỳ câu hỏi nào nhé!",
     },
   ]);
@@ -139,7 +146,7 @@ export default function ChatPanel({ onJumpToTime }) {
           id: generateMsgId(),
           role: "assistant",
           content:
-            "⚠️ Có lỗi khi kết nối tới máy chủ AI Chatbot. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.",
+            "Có lỗi khi kết nối tới máy chủ AI Chatbot. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.",
           source: "error",
         },
       ]);
@@ -160,7 +167,9 @@ export default function ChatPanel({ onJumpToTime }) {
     if (!content) return null;
 
     const displayContent =
-      role === "assistant" ? content.replace(/\*/g, "").replace(/•/g, "-") : content;
+      stripEmojis(
+        role === "assistant" ? content.replace(/\*/g, "").replace(/•/g, "-") : content
+      );
 
     // Phân tách chuỗi theo mốc thời gian dạng [12.5s] hoặc [5s]
     const parts = displayContent.split(/(\[\d+(?:\.\d+)?s\])/g);
@@ -176,7 +185,7 @@ export default function ChatPanel({ onJumpToTime }) {
             onClick={() => onJumpToTime?.(seconds)}
             title={`Nhấp để xem lại frame tại mốc ${seconds}s`}
           >
-            ⏱️ {seconds}s
+            {seconds}s
           </button>
         );
       }
@@ -200,7 +209,7 @@ export default function ChatPanel({ onJumpToTime }) {
       {/* ─── Header Chatbot ─── */}
       <div className="chat-panel__header">
         <div className="chat-panel__title">
-          <span className="chat-panel__avatar">🤖</span>
+          <span className="chat-panel__avatar">AI</span>
           <div>
             <div className="chat-panel__name">AI Trợ Lý Cảm Xúc</div>
             <div className="chat-panel__status">
@@ -222,7 +231,7 @@ export default function ChatPanel({ onJumpToTime }) {
           }
           title="Xóa đoạn hội thoại"
         >
-          🧹
+          Xóa
         </button>
       </div>
 
@@ -234,7 +243,7 @@ export default function ChatPanel({ onJumpToTime }) {
             className={`chat-bubble-wrapper chat-bubble-wrapper--${msg.role}`}
           >
             {msg.role === "assistant" && (
-              <div className="chat-avatar-mini">✨</div>
+              <div className="chat-avatar-mini">AI</div>
             )}
             <div className={`chat-bubble chat-bubble--${msg.role}`}>
               <div className="chat-bubble__text">
@@ -243,12 +252,12 @@ export default function ChatPanel({ onJumpToTime }) {
               {msg.source && msg.role === "assistant" && (
                 <div className="chat-bubble__source">
                   {msg.source === "direct_engine"
-                    ? "⚡ Tự động trả lời (Dữ liệu phiên)"
+                    ? "Tự động trả lời (Dữ liệu phiên)"
                     : msg.source === "gemini"
-                    ? "🧠 Trả lời bởi Google Gemini AI"
-                    : msg.source === "smart_fallback"
-                    ? "💡 Phân tích dự phòng thông minh"
-                    : "💡 Phân tích quy tắc"}
+                      ? "Trả lời bởi Google Gemini AI"
+                      : msg.source === "smart_fallback"
+                        ? "Phân tích dự phòng thông minh"
+                        : "Phân tích quy tắc"}
                 </div>
               )}
             </div>
@@ -257,7 +266,7 @@ export default function ChatPanel({ onJumpToTime }) {
 
         {isLoading && (
           <div className="chat-bubble-wrapper chat-bubble-wrapper--assistant">
-            <div className="chat-avatar-mini">✨</div>
+            <div className="chat-avatar-mini">AI</div>
             <div className="chat-bubble chat-bubble--assistant chat-bubble--loading">
               <span className="chat-typing-dot" />
               <span className="chat-typing-dot" />
@@ -299,7 +308,7 @@ export default function ChatPanel({ onJumpToTime }) {
           disabled={!inputValue.trim() || isLoading}
           title="Gửi câu hỏi"
         >
-          ➤
+          Gửi
         </button>
       </div>
     </div>

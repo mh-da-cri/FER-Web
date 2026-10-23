@@ -7,14 +7,14 @@ import ChatPanel from "@/components/ChatPanel";
 import { sessionTimeline } from "@/utils/sessionTimeline";
 
 const EMOTION_LABELS = {
-  happy: { emoji: "😄", label: "Vui vẻ" },
-  sad: { emoji: "😢", label: "Buồn" },
-  angry: { emoji: "😠", label: "Tức giận" },
-  surprise: { emoji: "😲", label: "Ngạc nhiên" },
-  fear: { emoji: "😨", label: "Sợ hãi" },
-  disgust: { emoji: "🤢", label: "Ghê tởm" },
-  neutral: { emoji: "😐", label: "Bình thường" },
-  fatigue: { emoji: "😴", label: "Mệt mỏi" },
+  happy: { label: "Vui vẻ" },
+  sad: { label: "Buồn" },
+  angry: { label: "Tức giận" },
+  surprise: { label: "Ngạc nhiên" },
+  fear: { label: "Sợ hãi" },
+  disgust: { label: "Ghê tởm" },
+  neutral: { label: "Bình thường" },
+  fatigue: { label: "Mệt mỏi" },
 };
 
 export default function HomePage() {
@@ -31,7 +31,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="app-container app-container--three-cols">
+    <div className="app-container app-container--analysis-chat">
       {/* ─── Header ─── */}
       <header className="app-header">
         <div className="app-header__badge">
@@ -39,30 +39,21 @@ export default function HomePage() {
         </div>
         <h1 className="app-header__title">AI Camera</h1>
         <p className="app-header__subtitle">
-          Bảng phân tích cảm xúc (Trái) • Camera giám sát (Giữa) • Trợ lý AI Chatbot (Phải)
+          Camera giám sát • Phân tích cảm xúc và Trợ lý AI Chatbot
         </p>
       </header>
 
-      {/* ─── Main Content: Bố cục 3 cột riêng biệt ─── */}
-      <main className="three-column-layout">
-        {/* CỘT TRÁI: Bảng Phân Tích Kết Quả & Thống Kê Phiên */}
-        <section className="layout-col layout-col--left" aria-label="Bảng phân tích cảm xúc">
-          <div className="layout-col__header">
-            <h2 className="layout-col__title">📊 Phân Tích Cảm Xúc</h2>
-          </div>
-          <ResultsPanel result={analysisResult} />
-        </section>
-
-        {/* CỘT GIỮA: Camera Stream & Điều Khiển */}
-        <section className="layout-col layout-col--center" aria-label="Khung camera giám sát">
+      {/* ─── Main Content: Camera bên trái, phân tích và chatbot bên phải ─── */}
+      <main className="analysis-chat-layout">
+        <section className="layout-col layout-col--camera" aria-label="Khung camera giám sát">
           <CameraStream
             onResult={setAnalysisResult}
             onStatusChange={setCameraStatus}
           />
         </section>
 
-        {/* CỘT PHẢI: AI Chatbot Phân Tích & Tra Cứu */}
-        <section className="layout-col layout-col--right" aria-label="AI Trợ lý Chatbot">
+        <section className="layout-col layout-col--analysis-chat" aria-label="Phân tích cảm xúc và AI Chatbot">
+          <ResultsPanel result={analysisResult} />
           <ChatPanel onJumpToTime={handleJumpToTime} />
         </section>
       </main>
@@ -73,13 +64,13 @@ export default function HomePage() {
           <div className="review-modal" onClick={(e) => e.stopPropagation()}>
             <div className="review-modal__header">
               <div className="review-modal__title">
-                ⏱️ Xem lại Frame tại mốc <strong>[{selectedEntry.timestamp}s]</strong>
+                Xem lại Frame tại mốc <strong>[{selectedEntry.timestamp}s]</strong>
               </div>
               <button
                 className="review-modal__close-btn"
                 onClick={() => setSelectedEntry(null)}
               >
-                ✕
+                Đóng
               </button>
             </div>
 
@@ -96,7 +87,6 @@ export default function HomePage() {
                 <div className="review-info-item">
                   <span className="review-info-label">Biểu cảm chính</span>
                   <span className="review-info-val review-info-val--dominant">
-                    {EMOTION_LABELS[selectedEntry.dominantEmotion]?.emoji || ""}{" "}
                     {EMOTION_LABELS[selectedEntry.dominantEmotion]?.label || selectedEntry.dominantEmotion}
                     {" "}({Math.round((selectedEntry.dominantConfidence || 0) * 100)}%)
                   </span>
@@ -105,10 +95,10 @@ export default function HomePage() {
                   <span className="review-info-label">Lý do ghi nhận</span>
                   <span className="review-info-val">
                     {selectedEntry.triggerReason === "emotion_changed"
-                      ? "⚡ Đổi cảm xúc"
+                      ? "Đổi cảm xúc"
                       : selectedEntry.triggerReason === "10s_interval"
-                      ? "⏱️ Định kỳ 10s"
-                      : "📸 Thủ công"}
+                        ? "Định kỳ 10s"
+                        : "Thủ công"}
                   </span>
                 </div>
               </div>
@@ -122,12 +112,12 @@ export default function HomePage() {
                   {Object.entries(selectedEntry.emotions)
                     .sort((a, b) => b[1] - a[1])
                     .map(([em, val]) => {
-                      const cfg = EMOTION_LABELS[em] || { emoji: "•", label: em };
+                      const cfg = EMOTION_LABELS[em] || { label: em };
                       const pct = Math.round(val * 100);
                       return (
                         <div className="review-emotion-row" key={em}>
                           <span className="review-emotion-name">
-                            {cfg.emoji} {cfg.label}
+                            {cfg.label}
                           </span>
                           <span className="review-emotion-pct">{pct}%</span>
                           <div className="review-emotion-bar-track">

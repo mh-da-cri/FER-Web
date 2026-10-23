@@ -8,11 +8,11 @@
 /* ─── CSS Custom Properties ─── */
 :root {
   /* Color palette */
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #111827;
-  --bg-card: rgba(17, 24, 39, 0.7);
-  --bg-glass: rgba(255, 255, 255, 0.04);
-  --bg-glass-hover: rgba(255, 255, 255, 0.08);
+  --bg-primary: #f3e2d2;
+  --bg-secondary: #3f3f3f;
+  --bg-card: #4a4a4a;
+  --bg-glass: #4a4a4a;
+  --bg-glass-hover: #555;
 
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
@@ -30,9 +30,7 @@
   --accent-amber-glow: rgba(245, 158, 11, 0.3);
 
   --gradient-primary: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
-  --gradient-bg: radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
-                 radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
-                 radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+  --gradient-bg: none;
 
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-accent: rgba(6, 182, 212, 0.3);
@@ -87,9 +85,17 @@ body::before {
 }
 
 @keyframes bgShift {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
 }
 
 /* ─── Layout ─── */
@@ -116,7 +122,7 @@ body::before {
   border: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--accent-cyan);
+  color: #000;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 16px;
@@ -133,24 +139,32 @@ body::before {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
 }
 
 .app-header__title {
   font-size: 2.5rem;
   font-weight: 800;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: none;
+  color: #000;
+  -webkit-text-fill-color: #000;
   line-height: 1.2;
   margin-bottom: 8px;
 }
 
 .app-header__subtitle {
   font-size: 1rem;
-  color: var(--text-secondary);
+  color: #000;
   font-weight: 400;
 }
 
@@ -256,8 +270,15 @@ body::before {
 }
 
 @keyframes floatIcon {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .camera-placeholder__text {
@@ -340,7 +361,7 @@ body::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, transparent, rgba(255,255,255,0.05));
+  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.05));
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -394,9 +415,15 @@ body::before {
   box-shadow: var(--shadow-glow-violet);
 }
 
-.btn__icon {
-  font-size: 1.1rem;
-  line-height: 1;
+.btn--realtime {
+  background: #15803d;
+  border-color: #16a34a;
+}
+
+.btn--realtime-active {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  border-color: #22c55e;
+  color: #fff;
 }
 
 /* ─── Sidebar ─── */
@@ -406,10 +433,56 @@ body::before {
   gap: 20px;
 }
 
+.results-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.results-overview--with-stats {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.results-overview--with-stats>.glass-card {
+  padding: 12px 14px;
+}
+
+.results-overview__primary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.results-overview__primary>.glass-card {
+  padding: 12px 14px;
+}
+
+.results-overview--with-stats .glass-card__title {
+  margin-bottom: 8px;
+}
+
+.current-emotion-card {
+  align-self: center;
+  width: 240px;
+  height: 240px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.current-emotion-card>.current-emotion {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* ─── Current Emotion ─── */
 .current-emotion {
   text-align: center;
-  padding: 28px 20px;
+  padding: 8px 8px;
 }
 
 .current-emotion__icon {
@@ -419,21 +492,31 @@ body::before {
 }
 
 @keyframes emotionBounce {
-  0% { transform: scale(0.5); opacity: 0; }
-  60% { transform: scale(1.15); }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .current-emotion__label {
-  font-size: 1.3rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   text-transform: capitalize;
 }
 
 .current-emotion__confidence {
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: var(--text-secondary);
 }
 
@@ -503,17 +586,37 @@ body::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2));
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2));
 }
 
 /* Emotion colors */
-.emotion-bar--happy .emotion-bar__fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-.emotion-bar--sad .emotion-bar__fill { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-.emotion-bar--angry .emotion-bar__fill { background: linear-gradient(90deg, #ef4444, #f87171); }
-.emotion-bar--surprise .emotion-bar__fill { background: linear-gradient(90deg, #a855f7, #c084fc); }
-.emotion-bar--fear .emotion-bar__fill { background: linear-gradient(90deg, #6366f1, #818cf8); }
-.emotion-bar--disgust .emotion-bar__fill { background: linear-gradient(90deg, #22c55e, #4ade80); }
-.emotion-bar--neutral .emotion-bar__fill { background: linear-gradient(90deg, #64748b, #94a3b8); }
+.emotion-bar--happy .emotion-bar__fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.emotion-bar--sad .emotion-bar__fill {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.emotion-bar--angry .emotion-bar__fill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.emotion-bar--surprise .emotion-bar__fill {
+  background: linear-gradient(90deg, #a855f7, #c084fc);
+}
+
+.emotion-bar--fear .emotion-bar__fill {
+  background: linear-gradient(90deg, #6366f1, #818cf8);
+}
+
+.emotion-bar--disgust .emotion-bar__fill {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.emotion-bar--neutral .emotion-bar__fill {
+  background: linear-gradient(90deg, #64748b, #94a3b8);
+}
 
 /* ─── Face Info ─── */
 .face-info {
@@ -588,7 +691,9 @@ body::before {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Realtime Camera & HUD Controls ─── */
@@ -597,76 +702,6 @@ body::before {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 14px;
-}
-
-.realtime-toggle-wrapper {
-  display: flex;
-  align-items: center;
-}
-
-.switch-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.switch-title {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: color var(--transition-fast);
-}
-
-.switch-label:hover .switch-title {
-  color: var(--text-primary);
-}
-
-.switch-container {
-  position: relative;
-  width: 44px;
-  height: 24px;
-}
-
-.switch-container input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.switch-slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background-color: rgba(255, 255, 255, 0.12);
-  border: 1px solid var(--border-subtle);
-  border-radius: 24px;
-  transition: var(--transition-base);
-}
-
-.switch-slider::before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--text-secondary);
-  border-radius: 50%;
-  transition: var(--transition-base);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
-.switch-container input:checked + .switch-slider {
-  background-color: var(--accent-cyan);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 12px var(--accent-cyan-glow);
-}
-
-.switch-container input:checked + .switch-slider::before {
-  transform: translateX(20px);
-  background-color: #ffffff;
 }
 
 /* ─── Camera Status Realtime Badge ─── */
@@ -683,8 +718,17 @@ body::before {
 }
 
 @keyframes dotPulse {
-  0% { transform: scale(0.8); opacity: 0.6; box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
-  100% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 8px 3px rgba(6, 182, 212, 0.8); }
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7);
+  }
+
+  100% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 8px 3px rgba(6, 182, 212, 0.8);
+  }
 }
 
 /* ─── Camera HUD Overlay Stats ─── */
@@ -753,7 +797,7 @@ body::before {
   align-items: center;
   margin-top: 10px;
   padding: 3px 10px;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 500;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
@@ -763,8 +807,15 @@ body::before {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ─── Button Outline (Reset Session) ─── */
@@ -780,6 +831,17 @@ body::before {
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.controls-bar .btn--outline {
+  background: #ca8a04;
+  border-color: #eab308;
+  color: #fff;
+}
+
+.controls-bar .btn--outline:hover {
+  background: #a16207;
+  border-color: #facc15;
+}
+
 /* ─── Snapshot Preview Header ─── */
 .snapshot-preview__label {
   font-size: 0.75rem;
@@ -789,14 +851,19 @@ body::before {
 
 /* ─── Session Stats Card ─── */
 .session-stats-card {
+  min-height: 320px;
   border-color: rgba(6, 182, 212, 0.2);
+}
+
+.results-overview--with-stats>.glass-card {
+  min-width: 0;
 }
 
 .session-stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .stat-item {
@@ -835,19 +902,19 @@ body::before {
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .session-distribution__list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .session-dist-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .session-dist-row__header {
@@ -876,60 +943,37 @@ body::before {
   transition: width 0.3s ease;
 }
 
-/* ─── Bố Cục 3 Cột: Phân Tích (Trái) • Camera (Giữa) • Chatbot (Phải) ─── */
-.app-container--three-cols {
-  max-width: 1720px;
+/* ─── Camera bên trái, bảng phân tích phía trên chatbot bên phải ─── */
+.app-container--analysis-chat {
+  max-width: 2000px;
   width: 100%;
   margin: 0 auto;
   padding: 20px 24px;
 }
 
-.three-column-layout {
+.analysis-chat-layout {
   display: grid;
-  grid-template-columns: 330px 1fr 370px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(680px, 800px);
+  gap: 24px;
   align-items: start;
 }
 
 .layout-col {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   min-width: 0;
 }
 
-.layout-col--left {
-  /* Bảng phân tích kết quả bên trái */
-}
-
-.layout-col--center {
-  /* Khung Camera ở giữa */
-}
-
-.layout-col--right {
-  /* AI Chatbot bên phải */
-}
-
-.layout-col__header {
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  margin-bottom: -4px;
-}
-
-.layout-col__title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.layout-col--analysis-chat .sidebar {
+  gap: 14px;
 }
 
 /* ─── Chat Panel Component ─── */
 .chat-panel {
   display: flex;
   flex-direction: column;
-  height: 600px;
+  height: 500px;
   padding: 16px;
 }
 
@@ -986,7 +1030,8 @@ body::before {
   background: transparent;
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
-  width: 28px;
+  min-width: 48px;
+  padding: 4px 6px;
   height: 28px;
   border-radius: 6px;
   cursor: pointer;
@@ -1127,8 +1172,15 @@ body::before {
 }
 
 @keyframes typingBounce {
-  0% { transform: translateY(0); opacity: 0.4; }
-  100% { transform: translateY(-5px); opacity: 1; }
+  0% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
 }
 
 /* ─── Quick Suggestion Chips ─── */
@@ -1190,7 +1242,8 @@ body::before {
   background: var(--gradient-primary);
   border: none;
   border-radius: var(--radius-md);
-  width: 42px;
+  min-width: 56px;
+  padding: 0 10px;
   color: #ffffff;
   font-size: 1rem;
   cursor: pointer;
@@ -1339,37 +1392,73 @@ body::before {
   justify-content: flex-end;
 }
 
-/* ─── Responsive Layout ─── */
-@media (max-width: 1400px) {
-  .three-column-layout {
-    grid-template-columns: 310px 1fr 340px;
-    gap: 16px;
-  }
+/* ─── High-contrast black panels and white text ─── */
+.glass-card,
+.review-modal,
+.chat-bubble--assistant,
+.stat-item,
+.review-info-item,
+.camera-placeholder,
+.chip-btn,
+.chat-input {
+  background: #4a4a4a;
 }
 
-@media (max-width: 1200px) {
-  .three-column-layout {
-    grid-template-columns: 1fr 1fr;
+body,
+body * {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.app-header__badge,
+.app-header__title,
+.app-header__subtitle {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+}
+
+.app-header__badge {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.camera-panel {
+  background: #000;
+}
+
+body *::placeholder {
+  color: #fff !important;
+  opacity: 0.7;
+}
+
+/* ─── Responsive Layout ─── */
+@media (max-width: 1300px) {
+  .analysis-chat-layout {
+    grid-template-columns: 1fr;
   }
-  .layout-col--center {
-    grid-column: 1 / -1;
+
+  .results-overview--with-stats {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .layout-col--camera {
     order: -1;
   }
 }
 
 @media (max-width: 768px) {
+
   .app-container,
-  .app-container--three-cols {
+  .app-container--analysis-chat {
     padding: 14px;
   }
 
-  .three-column-layout {
-    grid-template-columns: 1fr;
+  .analysis-chat-layout {
     gap: 16px;
   }
 
-  .layout-col--center {
-    order: -1;
+  .results-overview--with-stats {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   }
 
   .app-header__title {
@@ -1384,5 +1473,3 @@ body::before {
     min-width: 120px;
   }
 }
-
-
